@@ -192,7 +192,20 @@ def session_info(user_tz: str) -> dict:
 # ---------------------------------------------------------------------------
 # MÓDULO 3: DATOS DE MERCADO REALES (Twelve Data)
 # ---------------------------------------------------------------------------
-_md = {"candles": None, "c_at": 0.0, "price": None, "p_at": 0.0}
+_md = {"candles": None, "c_at": 0.0, "price": None, "p_at": 0.0, "src": None}
+# El plan gratuito de Twelve Data limita las consultas diarias: se lleva la cuenta y se deja margen.
+TD_DAILY_LIMIT = int(os.getenv("TWELVEDATA_DAILY_LIMIT", "700"))
+_td_budget = {"day": None, "used": 0}
+
+
+def td_allowed() -> bool:
+    today = datetime.now(timezone.utc).date()
+    if _td_budget["day"] != today:
+        _td_budget.update(day=today, used=0)
+    if _td_budget["used"] >= TD_DAILY_LIMIT:
+        return False
+    _td_budget["used"] += 1
+    return True
 
 
 async def get_candles(n: int = 120) -> Optional[list]:
@@ -200,6 +213,9 @@ async def get_candles(n: int = 120) -> Optional[list]:
     if not TWELVEDATA_API_KEY:
         return None
     if _md["candles"] and time.time() - _md["c_at"] < 60:
+        return _md["candles"]
+    if not td_allowed():
+        log.warning("Límite diario de Twelve Data alcanzado: se usan las últimas velas guardadas")
         return _md["candles"]
     try:
         r = await http().get("https://api.twelvedata.com/time_series", params={
@@ -219,19 +235,27 @@ async def get_candles(n: int = 120) -> Optional[list]:
 
 
 async def get_price() -> Optional[float]:
-    if not TWELVEDATA_API_KEY:
-        return None
-    if _md["price"] and time.time() - _md["p_at"] < 10:
+    """Precio de XAU/USD para las alarmas. Primero una fuente gratuita sin límite diario
+    (gold-api.com, cada 10 s); si falla, Twelve Data con caché de 60 s para no gastar el cupo."""
+    if _md["price"] and time.time() - _md["p_at"] < (10 if _md["src"] == "gold-api" else 60):
         return _md["price"]
     try:
-        r = await http().get("https://api.twelvedata.com/price",
-                             params={"symbol": "XAU/USD", "apikey": TWELVEDATA_API_KEY})
+        r = await http().get("https://api.gold-api.com/price/XAU")
         p = float(r.json()["price"])
-        _md.update(price=p, p_at=time.time())
+        _md.update(price=p, p_at=time.time(), src="gold-api")
         return p
     except Exception as exc:
-        log.warning("Twelve Data (precio) no disponible: %s", exc)
-        return _md["price"]
+        log.info("gold-api no disponible (%s); se intenta Twelve Data", exc)
+    if TWELVEDATA_API_KEY and td_allowed():
+        try:
+            r = await http().get("https://api.twelvedata.com/price",
+                                 params={"symbol": "XAU/USD", "apikey": TWELVEDATA_API_KEY})
+            p = float(r.json()["price"])
+            _md.update(price=p, p_at=time.time(), src="twelvedata")
+            return p
+        except Exception as exc:
+            log.warning("Twelve Data (precio) no disponible: %s", exc)
+    return _md["price"]
 
 
 def atr14(candles: list) -> Optional[float]:
@@ -391,7 +415,9 @@ async def health():
 @app.get("/api/v1/config")
 async def config():
     return {"gemini": ai_client is not None, "model": GEMINI_MODEL,
-            "market_data": bool(TWELVEDATA_API_KEY),
+            "market_data": True,  # /price usa gold-api y, si falla, Twelve Data
+            "candles": bool(TWELVEDATA_API_KEY),
+            "twelvedata_used_today": _td_budget["used"], "twelvedata_daily_limit": TD_DAILY_LIMIT,
             "telegram": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
             "notify_key_required": bool(NOTIFY_KEY), "brief": BRIEF_ENABLED,
             "session": session_phase()}
@@ -409,8 +435,8 @@ async def calendar():
 async def price():
     p = await get_price()
     if p is None:
-        raise HTTPException(503, "Precio no disponible (configura TWELVEDATA_API_KEY).")
-    return {"price": p, "source": "twelvedata", "at": datetime.now(timezone.utc).isoformat()}
+        raise HTTPException(503, "Precio no disponible en este momento.")
+    return {"price": p, "source": _md["src"], "at": datetime.now(timezone.utc).isoformat()}
 
 
 @app.post("/api/v1/analyze-chart")
