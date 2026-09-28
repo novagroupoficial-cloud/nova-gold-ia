@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="es" class="dark notranslate" translate="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nova Gold IA | Copiloto XAU/USD M15</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {
+        fontFamily: { sans: ['"Plus Jakarta Sans"','system-ui','sans-serif'], mono: ['"JetBrains Mono"','ui-monospace','monospace'] },
+        colors: { brand: { gold:'#D97706', goldLight:'#F59E0B', surface:'#0B0F19', card:'#111827', border:'#1E293B', accent:'#10B981' } }
+      } }
+    }
+  </script>
+  <style>
+    button:focus-visible, input:focus-visible, select:focus-visible, #chartBox:focus-visible { outline: 2px solid #F59E0B; outline-offset: 2px; }
+    .lvl-pill { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+    @keyframes hitFlash { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+    .hit-flash { animation: hitFlash .5s ease-in-out 4; }
+    @keyframes toastIn { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .toast { animation: toastIn .25s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .hit-flash, .toast, .animate-pulse, .animate-spin { animation: none !important; } }
+  </style>
+</head>
+<body class="bg-brand-surface text-slate-200 font-sans antialiased min-h-screen">
+
+  <header class="border-b border-brand-border bg-brand-surface/90 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-gold to-amber-200 p-[1px]">
+          <div class="w-full h-full bg-brand-surface rounded-[11px] flex items-center justify-center font-mono font-bold text-brand-goldLight text-sm">NG</div>
+        </div>
+        <div>
+          <span class="font-extrabold tracking-tight text-white text-base">Nova Gold <span class="text-brand-goldLight">IA</span></span>
+          <span class="text-[10px] font-mono text-slate-500 block -mt-1">Copiloto XAU/USD en M15</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+      <div id="ffBadge" class="hidden md:block text-[10px] font-mono font-bold px-3 py-1.5 rounded-full border bg-slate-800 text-slate-400 border-slate-700">Escudo FF: cargando…</div>
+      <!-- Precio en vivo -->
+      <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full font-mono text-xs">
+        <span id="feedDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+        <span class="text-slate-400">XAU/USD</span>
+        <span id="tickerPrice" class="text-white font-bold">—</span>
+        <span id="tickerSrc" class="hidden sm:inline text-slate-500 text-[10px]"></span>
+      </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="configWarning" class="hidden max-w-7xl mx-auto px-4 mt-4">
+    <div class="bg-amber-950/30 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200">
+      Estás abriendo la página como archivo local, sin servidor. Súbela junto al backend (carpeta <code class="font-mono">static/</code>) o escribe la URL del backend en <code class="font-mono">API_BASE_URL</code>. Mientras tanto puedes usar la demostración.
+    </div>
+  </div>
+
+  <!-- Pestañas + barra de sesión -->
+  <div class="max-w-7xl mx-auto px-4 mt-4 flex flex-wrap items-center justify-between gap-3">
+    <nav class="flex gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1" role="tablist">
+      <button class="tab-btn px-4 py-2 rounded-lg text-sm font-bold" data-tab="trade" role="tab">📈 Operar</button>
+      <button class="tab-btn px-4 py-2 rounded-lg text-sm font-bold" data-tab="news" role="tab">📰 Noticias <span id="tabNewsCount" class="hidden ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500 text-white"></span></button>
+    </nav>
+    <div class="flex flex-wrap items-center gap-2 text-xs font-mono">
+      <span id="sessBadge" class="px-3 py-1.5 rounded-full border bg-slate-800 text-slate-400 border-slate-700">Sesión: —</span>
+      <span class="px-3 py-1.5 rounded-full border bg-slate-900 text-slate-300 border-slate-800">Vela M15 cierra en <strong id="candleCd" class="text-white">--:--</strong></span>
+    </div>
+  </div>
+
+  <main id="tabTrade" class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <section class="lg:col-span-12 order-first bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-sm font-bold text-slate-300">Mapa del día <span id="dayMapNow" class="font-normal text-slate-400"></span></h3>
+        <div class="flex flex-wrap gap-3 text-[10px] text-slate-400">
+          <span class="flex items-center gap-1"><span class="w-3 h-2 rounded-sm" style="background:#0EA5E9"></span>Londres</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-2 rounded-sm" style="background:#10B981"></span>Solapamiento</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-2 rounded-sm" style="background:#6366F1"></span>Tarde NY</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-2 rounded-sm" style="background:#78716C"></span>Pausa</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-2 rounded-sm" style="background:#334155"></span>Asia / cierre</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-2 rounded-sm border-2 border-amber-400"></span>Tu horario</span>
+          <span class="flex items-center gap-1"><span class="w-0.5 h-3 bg-rose-500"></span>Noticia USD</span>
+        </div>
+      </div>
+      <div id="dayMap" class="relative h-14 mt-5 select-none" aria-label="Fases del mercado del oro hoy"></div>
+    </section>
+
+    <!-- ============ COLUMNA IZQUIERDA: controles ============ -->
+    <aside class="lg:col-span-4 space-y-5 order-2 lg:order-1">
+
+      <section class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4">
+        <h3 class="text-sm text-slate-300 font-bold">Horario de trading</h3>
+        <div id="sessBox" class="rounded-xl p-3 border text-xs bg-slate-800/50 border-slate-700 text-slate-300"></div>
+        <div class="space-y-2 text-xs">
+          <label class="block text-slate-400" for="selSessMode">Referencia del horario</label>
+          <select id="selSessMode" class="w-full bg-brand-surface border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
+            <option value="fixed">Hora de Ecuador (fija)</option>
+            <option value="ny">Hora de Nueva York (sigue el cambio de horario de EE. UU.)</option>
+          </select>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-slate-400">Desde <span class="sess-tz text-[10px]"></span><input id="inpSessStart" type="time" value="07:00" class="mt-1 w-full bg-brand-surface border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-white"></label>
+            <label class="text-slate-400">Hasta <span class="sess-tz text-[10px]"></span><input id="inpSessEnd" type="time" value="10:30" class="mt-1 w-full bg-brand-surface border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-white"></label>
+          </div>
+          <label class="flex items-center gap-2 text-slate-300 cursor-pointer"><input type="checkbox" id="chkLondon" class="accent-amber-500"> Incluir apertura de Londres (madrugada en Ecuador)</label>
+          <label class="flex items-center gap-2 text-slate-300 cursor-pointer"><input type="checkbox" id="chkSessOnly" class="accent-amber-500" checked> Bloquear señales fuera del horario</label>
+        </div>
+      </section>
+
+      <section class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4">
+        <h3 class="text-sm text-slate-300 font-bold">Tu cuenta</h3>
+        <div>
+          <div class="flex justify-between items-center mb-1 text-xs">
+            <label for="rngBalance" class="text-slate-300 font-semibold">Balance</label>
+            <span class="font-mono font-bold text-white text-sm" id="lblBalance">$500 USD</span>
+          </div>
+          <input type="range" id="rngBalance" min="200" max="5000" step="50" value="500" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand-goldLight">
+        </div>
+        <div>
+          <span class="block text-xs font-semibold text-slate-300 mb-1.5">Riesgo por operación</span>
+          <div class="grid grid-cols-3 gap-2" role="group" aria-label="Riesgo por operación">
+            <button type="button" class="btn-risk" data-risk="1.0">1.0%</button>
+            <button type="button" class="btn-risk" data-risk="1.5">1.5%</button>
+            <button type="button" class="btn-risk" data-risk="2.0">2.0%</button>
+          </div>
+          <p id="riskHint" class="text-[11px] text-slate-500 mt-2 font-mono leading-relaxed"></p>
+        </div>
+        <div class="flex items-center justify-between gap-2 text-xs">
+          <label for="selMaxTrades" class="text-slate-300 font-semibold">Máximo de operaciones por día</label>
+          <select id="selMaxTrades" class="bg-brand-surface border border-slate-700 rounded-lg px-2 py-1.5 text-white"><option value="2">2</option><option value="3" selected>3</option></select>
+        </div>
+        <p id="dailyLine" class="text-[11px] rounded-lg px-3 py-2 border bg-slate-800/50 border-slate-700 text-slate-300"></p>
+      </section>
+
+      <section class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4">
+        <h3 class="text-sm text-slate-300 font-bold">Precio y alarmas</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="text-xs text-slate-400 col-span-2" for="selSource">Fuente del precio</label>
+          <select id="selSource" class="col-span-2 bg-brand-surface border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
+            <option value="auto">Automático (cada 30 s)</option>
+            <option value="manual">Manual (lo escribo yo)</option>
+            <option value="sim" hidden>Simulación (demostración)</option>
+          </select>
+        </div>
+        <div>
+          <label for="inpPrice" class="block text-xs text-slate-400 mb-1">Precio actual</label>
+          <div class="flex gap-2">
+            <input type="number" id="inpPrice" step="0.01" min="0" placeholder="Ej. 3650.25" class="flex-1 min-w-0 bg-brand-surface border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-slate-600">
+            <button id="btnSetPrice" class="px-3 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:border-brand-goldLight">Fijar</button>
+          </div>
+          <p id="feedStatus" class="text-[11px] text-slate-500 mt-1"></p>
+        </div>
+        <div id="tgBox" class="hidden space-y-2 text-xs">
+          <label class="flex items-center gap-2 text-slate-300 cursor-pointer"><input type="checkbox" id="chkTg" class="accent-amber-500"> Enviar también las alarmas a Telegram</label>
+          <input id="inpNotifyKey" type="password" autocomplete="off" placeholder="Clave de notificación (NOTIFY_KEY)" class="hidden w-full bg-brand-surface border border-slate-700 rounded-lg px-3 py-2 font-mono text-white placeholder-slate-600">
+          <label id="lblRememberKey" class="hidden flex items-center gap-2 text-slate-400 cursor-pointer"><input type="checkbox" id="chkRememberKey" class="accent-amber-500" checked> Recordar la clave en este equipo</label>
+        </div>
+        <button id="btnAlerts" class="w-full py-2.5 rounded-xl text-xs font-bold border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20">
+          🔔 Activar sonido y notificaciones
+        </button>
+        <p class="text-[11px] text-slate-500 leading-relaxed">Las alarmas solo funcionan con esta página abierta. Para operaciones reales, crea también las alertas en tu MT5 o TradingView con el botón "Copiar niveles".</p>
+      </section>
+
+      <section class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm text-slate-300 font-bold">Noticias Forex Factory</h3>
+          <button id="btnFFRefresh" class="text-[11px] text-slate-400 hover:text-brand-goldLight">Actualizar</button>
+        </div>
+        <div id="ffStatusBox" class="rounded-xl p-3 border text-xs bg-slate-800/50 border-slate-700 text-slate-300">Cargando calendario…</div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <label class="text-slate-400" for="selFFWindow">Bloquear antes y después</label>
+          <select id="selFFWindow" class="bg-brand-surface border border-slate-700 rounded-lg px-2 py-1.5 text-white">
+            <option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">60 min</option>
+          </select>
+          <label class="col-span-2 flex items-center gap-2 text-slate-300 cursor-pointer">
+            <input type="checkbox" id="chkFFMedium" class="accent-amber-500"> Incluir noticias de impacto medio
+          </label>
+        </div>
+        <ol id="ffList" class="space-y-1.5"></ol>
+        <button class="go-news w-full py-2 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:border-brand-goldLight">Ver todas las noticias de la semana</button>
+        <p class="text-[11px] text-slate-500 leading-relaxed">Solo eventos del dólar (USD), que son los que mueven el oro. Horas en tu zona horaria. Fuente: calendario semanal de Forex Factory.</p>
+      </section>
+
+      <p class="text-[11px] text-slate-500 leading-relaxed px-1">Herramienta educativa e informativa. No es asesoría financiera. Operar oro con apalancamiento puede causar pérdidas mayores a las previstas.</p>
+    </aside>
+
+    <!-- ============ COLUMNA DERECHA: gráfico y operación ============ -->
+    <section class="lg:col-span-8 space-y-5 order-1 lg:order-2">
+
+      <!-- Panel del gráfico -->
+      <div class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-brand-border">
+          <div class="flex items-center gap-2">
+            <span id="resActionBadge" class="hidden font-mono text-xs font-black px-2.5 py-1 rounded-md border"></span>
+            <span id="phaseBadge" class="hidden text-[11px] font-bold px-2.5 py-1 rounded-md border"></span>
+            <span id="chartTitle" class="text-sm font-bold text-slate-300">Gráfico M15</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btnCalib" disabled class="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:border-brand-goldLight disabled:opacity-40">📏 Calibrar eje</button>
+            <button id="btnNewChart" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:border-brand-goldLight">Cambiar gráfico</button>
+          </div>
+        </div>
+
+        <!-- Barra de calibración -->
+        <div id="calibBar" class="hidden px-4 py-3 bg-amber-950/30 border-b border-amber-500/30 text-xs text-amber-100 flex flex-wrap items-center gap-2">
+          <span id="calibText"></span>
+          <span id="calibInputWrap" class="hidden flex items-center gap-2">
+            <input id="calibPrice" type="number" step="0.01" placeholder="Precio" class="w-28 bg-brand-surface border border-amber-500/40 rounded px-2 py-1 font-mono text-white">
+            <button id="btnCalibOk" class="px-3 py-1 rounded bg-amber-500 text-slate-950 font-bold">OK</button>
+          </span>
+          <button id="btnCalibCancel" class="ml-auto text-amber-300/70 hover:text-amber-200">Cancelar</button>
+        </div>
+
+        <!-- Zona de carga / gráfico -->
+        <div id="chartBox" tabindex="0" role="button" aria-label="Subir captura del gráfico" class="relative cursor-pointer select-none">
+          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" class="hidden">
+          <div id="dropPrompt" class="m-4 border-2 border-dashed border-slate-700 hover:border-brand-goldLight/60 rounded-2xl py-16 px-6 text-center transition">
+            <div class="w-14 h-14 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <p class="text-sm font-semibold text-slate-200">Arrastra, pega (Ctrl+V) o haz clic para subir tu captura</p>
+            <p class="text-xs text-slate-500 mt-1">XAU/USD en velas de 15 minutos. El eje de precios de la derecha debe verse completo.</p>
+          </div>
+          <div id="chartWrap" class="hidden relative">
+            <img id="chartImg" alt="Gráfico subido" class="block w-full h-auto">
+            <div id="overlay" class="absolute inset-0 overflow-hidden pointer-events-none"></div>
+          </div>
+        </div>
+
+        <!-- Acciones bajo el gráfico -->
+        <div class="flex flex-wrap gap-2 p-4 border-t border-brand-border">
+          <button id="btnAnalyze" disabled class="flex-1 min-w-[180px] py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-brand-gold to-brand-goldLight text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 flex items-center justify-center gap-2">
+            <span id="btnText">Analizar gráfico</span>
+            <span id="btnSpinner" class="hidden w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+          </button>
+          <button id="btnDemo" class="px-4 py-3 rounded-xl text-sm font-bold border border-slate-700 text-slate-300 hover:border-brand-goldLight">Ver demostración</button>
+          <button id="btnSim" class="hidden px-4 py-3 rounded-xl text-sm font-bold border border-sky-500/40 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20">▶ Simular recorrido</button>
+        </div>
+        <p id="statusLine" class="hidden px-4 pb-3 -mt-2 text-[11px] text-slate-400 font-mono"></p>
+      </div>
+
+      <!-- Error / bloqueo -->
+      <div id="alertBox" class="hidden bg-rose-950/20 border-2 border-rose-500/40 rounded-2xl p-5 space-y-2">
+        <p id="alertTitle" class="text-rose-300 font-bold text-sm"></p>
+        <p id="alertMessage" class="text-xs text-slate-300 leading-relaxed"></p>
+      </div>
+
+      <!-- Operación + alarmas -->
+      <div id="tradePanel" class="hidden grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-300">Operación</h3>
+            <span class="text-[11px] font-mono text-slate-400">Lote <strong id="resLots" class="text-amber-400"></strong></span>
+          </div>
+          <div id="warnList" class="hidden space-y-2"></div>
+          <div id="levelsTable" class="space-y-1.5 font-mono text-sm"></div>
+          <p class="text-xs text-slate-400 leading-relaxed"><strong class="text-slate-300">Por qué:</strong> <span id="resRationale"></span></p>
+          <button id="btnCopy" class="w-full py-2 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:border-brand-goldLight">Copiar niveles para MT5 / TradingView</button>
+        </div>
+
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4">
+          <h3 class="text-sm font-bold text-slate-300">Alarmas</h3>
+          <div id="alarmList" class="space-y-2"></div>
+          <div>
+            <span class="block text-[11px] text-slate-500 mb-1.5">Historial</span>
+            <ol id="eventLog" class="space-y-1.5 max-h-44 overflow-y-auto text-xs"></ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diario -->
+      <div class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-300">Diario de señales</h3>
+          <button id="btnClearJournal" class="text-[11px] text-slate-500 hover:text-rose-400">Borrar diario</button>
+        </div>
+        <div class="grid grid-cols-3 gap-3 font-mono text-center">
+          <div class="bg-brand-surface rounded-xl p-3 border border-slate-800"><span class="block text-[10px] text-slate-500">Cerradas</span><span id="stClosed" class="text-lg font-bold text-white">0</span></div>
+          <div class="bg-brand-surface rounded-xl p-3 border border-slate-800"><span class="block text-[10px] text-slate-500">Acierto</span><span id="stWin" class="text-lg font-bold text-white">—</span></div>
+          <div class="bg-brand-surface rounded-xl p-3 border border-slate-800"><span class="block text-[10px] text-slate-500">Resultado</span><span id="stR" class="text-lg font-bold text-white">—</span></div>
+        </div>
+        <div id="journalList" class="space-y-2 max-h-72 overflow-y-auto"></div>
+        <p id="journalEmpty" class="text-xs text-slate-500">Cada señal real que se active se guarda aquí sola, y su resultado se anota cuando salta el stop o un objetivo.</p>
+      </div>
+    </section>
+  </main>
+
+  <main id="tabNews" class="hidden max-w-7xl mx-auto px-4 py-6 space-y-5">
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-extrabold text-white">Noticias del mercado</h2>
+        <p id="newsSrc" class="text-xs text-slate-500 mt-0.5">Calendario económico de la semana, según Forex Factory.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="https://www.forexfactory.com/calendar" target="_blank" rel="noopener" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-700 text-slate-200 hover:border-brand-goldLight">Calendario en Forex Factory ↗</a>
+        <a href="https://www.forexfactory.com/news" target="_blank" rel="noopener" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-700 text-slate-200 hover:border-brand-goldLight">Titulares en Forex Factory ↗</a>
+      </div>
+    </div>
+
+    <!-- Informe pre-mercado 06:45 -->
+    <section id="briefBox" class="hidden bg-brand-card border border-amber-500/30 rounded-2xl p-5 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-sm font-bold text-amber-300">🌅 Informe pre-mercado (06:45 Ecuador)</h3>
+        <button id="btnBriefRun" class="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:border-brand-goldLight">Generar ahora</button>
+      </div>
+      <pre id="briefText" class="whitespace-pre-wrap font-sans text-sm text-slate-200 leading-relaxed"></pre>
+    </section>
+
+    <!-- Reseña de la semana -->
+    <section id="weekSummary" class="bg-brand-card border border-brand-border rounded-2xl p-5"></section>
+
+    <div class="flex flex-wrap gap-3 text-xs">
+      <select id="fltCur" class="bg-brand-surface border border-slate-700 rounded-lg px-3 py-2 text-white" aria-label="Moneda">
+        <option value="USD">Solo USD (mueve el oro)</option><option value="ALL">Todas las monedas</option>
+      </select>
+      <select id="fltImp" class="bg-brand-surface border border-slate-700 rounded-lg px-3 py-2 text-white" aria-label="Impacto">
+        <option value="High">Solo alto impacto</option><option value="Medium" selected>Alto y medio</option><option value="ALL">Todos</option>
+      </select>
+      <label class="flex items-center gap-2 text-slate-300 cursor-pointer bg-brand-surface border border-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="fltPast" class="accent-amber-500"> Mostrar las ya publicadas</label>
+    </div>
+
+    <div id="newsDays" class="space-y-5"></div>
+    <p class="text-[11px] text-slate-500 leading-relaxed">Las lecturas para el oro son tendencias habituales, no reglas: si el dato ya estaba descontado, el mercado puede reaccionar al revés. Horas en tu zona horaria.</p>
+  </main>
+
+  <!-- Notificaciones en pantalla -->
+  <div id="toasts" class="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-50 space-y-2" aria-live="assertive"></div>
+
+  <script>
+  // ======================= CONFIGURACIÓN =======================
+  // Vacío = mismo servidor (recomendado: el backend FastAPI sirve esta página desde static/).
+  // Si alojas la página en otro sitio, escribe aquí la URL del backend, p. ej. "https://nova-gold.onrender.com".
+  const API_BASE_URL = "";
+  const API = API_BASE_URL || (location.protocol.startsWith('http') ? '' : null);
+  let PRICE_URL = "https://api.gold-api.com/price/XAU";             // se sustituye por el del backend si tiene Twelve Data
+  const OZ_PER_LOT = 100, MIN_LOT = 0.01;
+  const REQUEST_TIMEOUT_MS = 90000, PRICE_POLL_MS = 30000;
+  const PENDING_MIN = 30;             // la orden pendiente vale 2 velas M15
+  const POSITION_MIN = 120;           // time-stop de la posición: 8 velas M15
+  const TP1_CLOSE = 0.60, BE_OFFSET = 0.20, ENTRY_TOL = 0.15;
+  const MAX_FILE_MB = 8, PRICE_TOLERANCE = 0.01;
+  const JOURNAL_KEY = "novagold_journal_v1";
+  const BOX_LEFT = 58;
+  // Forex Factory: el feed semanal permite ~2 descargas cada 5 min, así que se guarda en caché 1 hora.
+  const FF_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
+  const SESS_KEY = "novagold_session_v1";
+  const EC_TZ = "America/Guayaquil", NY_TZ = "America/New_York";
+  const FF_CACHE_KEY = "novagold_ff_cache_v1", FF_CACHE_MS = 60 * 60000, FF_MIN_GAP_MS = 5 * 60000;                // % del ancho donde empieza la caja de la operación
+
+  const COLORS = { entry:'#E2E8F0', sl:'#F43F5E', tp1:'#10B981', tp2:'#38BDF8', price:'#F59E0B' };
+
+  // ======================= ESTADO =======================
+  const S = {
+    file: null, calib: [], calibMode: false, pendingY: null, hoverY: null, pendingDemo: false,
+    setup: null, price: null, phase: 'idle', slActive: null, tp1Hit: false, createdAt: null,
+    hits: {}, log: [], flash: null, journalId: null, risk: 1.0,
+    audio: null, feedTimer: null, simTimer: null, source: 'auto',
+    maxTrades: 3, tg: false, cfg: null,
+    sess: { london: false, mode: 'fixed', start: '07:00', end: '10:30', only: true }, sessWasActive: null, sessEndWarned: false, tab: 'trade',
+    news: [], ffOk: false, ffWindow: 30, ffMedium: false, ffWarned: {}, ffLastFetch: 0
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+  const fmt = (v) => { const n = num(v); return n === null ? "—" : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const show = (id) => $(id).classList.remove('hidden');
+  const hide = (id) => $(id).classList.add('hidden');
+  const hhmm = (d) => d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const configured = API !== null;
+  if (!configured) show('configWarning');
+
+  // ======================= RIESGO =======================
+  function styleRisk() {
+    document.querySelectorAll('.btn-risk').forEach(b => {
+      const on = parseFloat(b.dataset.risk) === S.risk;
+      b.setAttribute('aria-pressed', on);
+      b.className = "btn-risk py-1.5 rounded-lg border text-xs font-mono font-bold " + (on ? "border-brand-gold text-brand-goldLight bg-amber-500/10" : "border-slate-800 text-slate-400 bg-slate-900");
+    });
+    const riskUsd = num($('rngBalance').value) * S.risk / 100;
+    $('riskHint').textContent = `Arriesgas $${riskUsd.toFixed(2)}. Con 0.01 lotes el stop no puede estar a más de $${(riskUsd / (MIN_LOT * OZ_PER_LOT)).toFixed(2)} de la entrada.`;
+  }
+  document.querySelectorAll('.btn-risk').forEach(b => b.addEventListener('click', () => { S.risk = parseFloat(b.dataset.risk); styleRisk(); }));
+  $('rngBalance').addEventListener('input', e => { $('lblBalance').textContent = `$${e.target.value} USD`; styleRisk(); });
+  S.risk = 1.0; styleRisk();
+
+  // ======================= CARGA DE IMAGEN =======================
+  const chartBox = $('chartBox');
+  chartBox.addEventListener('click', () => { if (!S.file) $('fileInput').click(); });
+  chartBox.addEventListener('keydown', e => { if (!S.file && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('fileInput').click(); } });
+  $('btnNewChart').addEventListener('click', () => $('fileInput').click());
+  $('fileInput').addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); e.target.value = ""; });
+  chartBox.addEventListener('dragover', e => { e.preventDefault(); $('dropPrompt').classList.add('border-brand-goldLight'); });
+  chartBox.addEventListener('dragleave', () => $('dropPrompt').classList.remove('border-brand-goldLight'));
+  chartBox.addEventListener('drop', e => { e.preventDefault(); $('dropPrompt').classList.remove('border-brand-goldLight'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+  document.addEventListener('paste', e => {
+    const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+    if (it) handleFile(it.getAsFile());
+  });
+
+  function handleFile(file) {
+    if (!file || !file.type.startsWith('image/')) return showAlert("Archivo no válido", "Sube una imagen PNG, JPG o WEBP del gráfico.");
+    if (file.size > MAX_FILE_MB * 1048576) return showAlert("Imagen demasiado grande", `El límite es ${MAX_FILE_MB} MB. Recorta la captura al área del gráfico.`);
+    resetTrade();
+    S.file = file; S.calib = [];
+    const reader = new FileReader();
+    reader.onload = e => {
+      $('chartImg').src = e.target.result;
+      hide('dropPrompt'); show('chartWrap'); show('btnNewChart');
+      chartBox.classList.remove('cursor-pointer');
+      chartBox.setAttribute('role', 'img'); chartBox.setAttribute('aria-label', 'Gráfico con niveles de la operación');
+      $('btnAnalyze').disabled = false; $('btnCalib').disabled = false;
+      hide('alertBox');
+      drawOverlay();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function showAlert(title, msg) { $('alertTitle').textContent = title; $('alertMessage').textContent = msg; show('alertBox'); }
+
+  // ======================= CALIBRACIÓN DEL EJE =======================
+  // Convierte precios en posiciones verticales con dos puntos conocidos del eje.
+  const priceToY = p => { const [a, b] = S.calib; return a.y + (p - a.p) * (b.y - a.y) / (b.p - a.p); };
+  const yToPrice = y => { const [a, b] = S.calib; return a.p + (y - a.y) * (b.p - a.p) / (b.y - a.y); };
+  const calibrated = () => S.calib.length === 2;
+
+  function startCalib() {
+    S.calibMode = true; S.calib = []; S.pendingY = null;
+    $('overlay').classList.remove('pointer-events-none');
+    $('overlay').style.cursor = 'crosshair';
+    show('calibBar'); updateCalibBar(); drawOverlay();
+  }
+  function endCalib() {
+    S.calibMode = false; S.pendingY = null; S.hoverY = null;
+    $('overlay').classList.add('pointer-events-none'); $('overlay').style.cursor = '';
+    hide('calibBar'); drawOverlay();
+  }
+  function updateCalibBar() {
+    const n = S.calib.length + 1;
+    if (S.pendingY === null) {
+      $('calibText').textContent = `Paso ${n} de 2: haz clic sobre la altura de un precio del eje derecho (${n === 1 ? 'uno alto' : 'uno bajo, lejos del primero'}).`;
+      hide('calibInputWrap');
+    } else {
+      $('calibText').textContent = `Paso ${n} de 2: ¿qué precio marca esa línea?`;
+      show('calibInputWrap'); $('calibPrice').value = ""; $('calibPrice').focus();
+    }
+  }
+  const ratioFromEvent = e => { const r = $('chartImg').getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)); };
+  $('overlay').addEventListener('mousemove', e => { if (S.calibMode && S.pendingY === null) { S.hoverY = ratioFromEvent(e); drawOverlay(); } });
+  $('overlay').addEventListener('click', e => { if (S.calibMode && S.pendingY === null) { S.pendingY = ratioFromEvent(e); updateCalibBar(); drawOverlay(); } });
+  $('btnCalib').addEventListener('click', startCalib);
+  $('btnCalibCancel').addEventListener('click', () => { S.calib = []; S.pendingDemo = false; endCalib(); });
+  $('calibPrice').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnCalibOk').click(); });
+  $('btnCalibOk').addEventListener('click', () => {
+    const p = num($('calibPrice').value);
+    if (!p) return $('calibPrice').focus();
+    if (S.calib.length === 1) {
+      const a = S.calib[0];
+      if (Math.abs(a.y - S.pendingY) < 0.08 || a.p === p) { toast('warn', 'Puntos muy cercanos', 'Elige dos precios más separados en el eje.'); S.pendingY = null; updateCalibBar(); return drawOverlay(); }
+      if ((S.pendingY > a.y) !== (p < a.p)) { toast('warn', 'Calibración invertida', 'El precio más alto debe estar más arriba en el gráfico.'); S.pendingY = null; updateCalibBar(); return drawOverlay(); }
+    }
+    S.calib.push({ y: S.pendingY, p }); S.pendingY = null;
+    if (calibrated()) { endCalib(); toast('info', 'Eje calibrado', 'Los niveles ya se dibujan sobre el gráfico.'); if (S.pendingDemo) { S.pendingDemo = false; runDemo(); } }
+    else { updateCalibBar(); drawOverlay(); }
+  });
+
+  // ======================= DIBUJO SOBRE EL GRÁFICO =======================
+  function levelLine(key, label, price, opts = {}) {
+    const color = COLORS[key];
+    const y = priceToY(price) * 100;
+    const flash = S.flash === key ? 'hit-flash' : '';
+    const done = opts.done ? ' ✓' : '';
+    if (y < 0 || y > 100) {
+      const top = y < 0;
+      return `<div class="absolute right-2 ${top ? 'top-1' : 'bottom-1'}"><span class="lvl-pill" style="background:${color};color:#0B0F19">${top ? '▲' : '▼'} ${label} ${fmt(price)} fuera de vista</span></div>`;
+    }
+    const left = opts.full ? 0 : BOX_LEFT;
+    const style = opts.dashed ? 'dashed' : 'solid';
+    return `<div class="absolute ${flash}" style="top:${y}%;left:${left}%;right:0">
+      <div style="border-top:2px ${style} ${color};${opts.faded ? 'opacity:.45' : ''}"></div>
+      <span class="lvl-pill absolute ${opts.full ? 'left-1' : 'right-1'} -translate-y-1/2 top-0" style="background:${color};color:#0B0F19">${label} ${fmt(price)}${done}</span>
+    </div>`;
+  }
+  function zone(p1, p2, rgba) {
+    const y1 = Math.max(0, Math.min(100, priceToY(p1) * 100)), y2 = Math.max(0, Math.min(100, priceToY(p2) * 100));
+    return `<div class="absolute" style="left:${BOX_LEFT}%;right:0;top:${Math.min(y1, y2)}%;height:${Math.abs(y2 - y1)}%;background:${rgba}"></div>`;
+  }
+
+  function drawOverlay() {
+    const out = [];
+    // Guías de calibración
+    if (S.calibMode && S.hoverY !== null && S.pendingY === null)
+      out.push(`<div class="absolute left-0 right-0" style="top:${S.hoverY * 100}%;border-top:1px dashed #F59E0B"></div>`);
+    if (S.calibMode) {
+      [...S.calib.map(c => ({ y: c.y, t: fmt(c.p) })), ...(S.pendingY !== null ? [{ y: S.pendingY, t: '?' }] : [])].forEach(c =>
+        out.push(`<div class="absolute left-0 right-0" style="top:${c.y * 100}%;border-top:2px solid #F59E0B"><span class="lvl-pill absolute left-2 -translate-y-1/2" style="background:#F59E0B;color:#0B0F19">${c.t}</span></div>`));
+    }
+
+    const s = S.setup;
+    if (s && calibrated() && !S.calibMode) {
+      if (s.tradable) {
+        const target = s.tp2 ?? s.tp1;
+        out.push(zone(s.entry, S.slActive ?? s.sl, 'rgba(244,63,94,.18)'));
+        out.push(zone(s.entry, target, 'rgba(16,185,129,.14)'));
+        // etiqueta de dirección al inicio de la caja
+        const ye = priceToY(s.entry) * 100;
+        if (ye >= 0 && ye <= 100)
+          out.push(`<div class="absolute" style="left:${BOX_LEFT}%;top:${ye}%"><span class="lvl-pill absolute -translate-x-full -translate-y-1/2 mr-1" style="background:${s.isBuy ? '#10B981' : '#F43F5E'};color:#0B0F19">${s.isBuy ? '▲ COMPRA' : '▼ VENTA'}</span></div>`);
+        if (s.tp2 !== null) out.push(levelLine('tp2', 'TP2', s.tp2, { done: !!S.hits.tp2 }));
+        out.push(levelLine('tp1', 'TP1', s.tp1, { done: !!S.hits.tp1 }));
+        out.push(levelLine('entry', 'Entrada', s.entry, { done: !!S.hits.entry }));
+        if (S.tp1Hit) out.push(levelLine('sl', 'Stop original', s.sl, { faded: true }));
+        out.push(levelLine('sl', S.tp1Hit ? 'Stop (BE)' : 'Stop', S.slActive ?? s.sl, { done: !!S.hits.sl }));
+      } else if (s.entry !== null && s.sl !== null) {
+        out.push(levelLine('entry', 'Entrada descartada', s.entry, { faded: true, dashed: true }));
+      }
+    }
+    if (S.price !== null && calibrated() && !S.calibMode) out.push(levelLine('price', 'Precio', S.price, { full: true, dashed: true }));
+
+    // Aviso para calibrar
+    if (s && s.tradable && !calibrated() && !S.calibMode)
+      out.push(`<div class="absolute inset-x-0 bottom-3 flex justify-center"><span class="bg-slate-950/90 border border-amber-500/50 text-amber-200 text-xs rounded-lg px-3 py-2">Calibra el eje (📏) para ver la operación sobre el gráfico</span></div>`);
+
+    $('overlay').innerHTML = out.join('');
+  }
+  window.addEventListener('resize', drawOverlay);
+
+  // ======================= ANÁLISIS CON EL BACKEND =======================
+  $('btnAnalyze').addEventListener('click', async () => {
+    if (!S.file) return;
+    if (!configured) return showAlert("Backend sin configurar", "Abre la página desde el servidor del backend o escribe su URL en API_BASE_URL. Mientras tanto, usa \"Ver demostración\".");
+    setLoading(true);
+    const slow = setTimeout(() => setStatus("El servidor está arrancando; la primera vez puede tardar hasta un minuto…"), 8000);
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+    const fd = new FormData();
+    fd.append('file', S.file);
+    fd.append('account_balance', $('rngBalance').value);
+    fd.append('risk_percentage', S.risk);
+    fd.append('timeframe', 'M15');
+    fd.append('session_active', sessionInfo().active);
+    fd.append('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Guayaquil");
+    const userPrice = num($('inpPrice').value);
+    if (userPrice) fd.append('current_price', userPrice);
+    fd.append('news_window', S.ffWindow);
+    fd.append('include_medium', S.ffMedium);
+    try {
+      const res = await fetch(`${API}/api/v1/analyze-chart`, { method: 'POST', body: fd, signal: ctrl.signal });
+      let data; try { data = await res.json(); } catch { throw new Error(`Respuesta con formato inesperado (HTTP ${res.status}).`); }
+      if (!res.ok && data?.status !== "SHIELD_BLOCKED") throw new Error(data?.message || data?.detail || `Error del servidor (HTTP ${res.status}).`);
+      handleAnalysis(data, userPrice);
+    } catch (err) {
+      console.error(err);
+      if (err.name === 'AbortError') showAlert("Tiempo agotado", "El servidor no respondió en 90 segundos. Revisa los logs en Render.");
+      else if (err instanceof TypeError) showAlert("Sin conexión con el servidor", "Revisa la URL, que el servicio esté activo y que permita CORS desde este dominio.");
+      else showAlert("No se pudo completar el análisis", err.message);
+    } finally { clearTimeout(slow); clearTimeout(to); setLoading(false); }
+  });
+  function setLoading(on) {
+    $('btnAnalyze').disabled = on; $('btnText').textContent = on ? "Analizando…" : "Analizar gráfico";
+    $('btnSpinner').classList.toggle('hidden', !on); if (!on) hide('statusLine');
+  }
+  function setStatus(m) { $('statusLine').textContent = m; show('statusLine'); }
+
+  function handleAnalysis(data, userPrice) {
+    hide('alertBox');
+    if (data?.status === "SHIELD_BLOCKED") {
+      resetTrade();
+      return showAlert(`Operación bloqueada: ${data.shield?.event_title || 'noticia de alto impacto en USD'}`, data.shield?.message || "Espera a que pase la noticia y se normalice el spread.");
+    }
+    if (!data?.success) return showAlert(
+      data?.status === 'AI_BUSY' ? "Gemini está saturado en este momento" : data?.status === 'PRICE_MISMATCH' ? "El precio del gráfico no coincide" : "No se pudo leer el gráfico",
+      data?.message || "Asegúrate de que se vean el eje de precios y la temporalidad M15.");
+    if (!data.trade_setup) return showAlert("Respuesta incompleta", "El servidor no devolvió un plan de operación.");
+
+    const tech = data.technical_extraction || {};
+    // Si el backend devuelve la escala del eje, se calibra solo:
+    // price_axis: { top: { y: 0.1, price: 3700 }, bottom: { y: 0.9, price: 3600 } }  (y = fracción de la altura)
+    const ax = tech.price_axis;
+    if (ax?.top && ax?.bottom && num(ax.top.y) !== null && num(ax.bottom.y) !== null && ax.top.price !== ax.bottom.price) {
+      S.calib = [{ y: num(ax.top.y), p: num(ax.top.price) }, { y: num(ax.bottom.y), p: num(ax.bottom.price) }];
+      toast('info', 'Eje calibrado por la IA', 'Si las líneas no coinciden con el gráfico, pulsa 📏 y calibra a mano.');
+    }
+
+    const setup = buildSetup(data.trade_setup, tech, userPrice, false);
+    (data.warnings || []).forEach(w => setup.warnings.push({ block: false, text: w }));
+    setup.rationale = tech.rationale || data.trade_setup.reason || "Sin explicación disponible.";
+    setup.session = data.session?.session_name || "";
+    loadSetup(setup);
+    if (setup.tradable && !calibrated()) startCalib();
+  }
+
+  // Revisión independiente: no se confía ciegamente en la IA
+  function buildSetup(raw, tech, userPrice, demo) {
+    const action = String(raw.action || "WAIT").toUpperCase();
+    const isBuy = action.includes('BUY'), isSell = action.includes('SELL');
+    const s = { action, isBuy, isSell, isWait: !isBuy && !isSell, demo,
+      entry: num(raw.entry_price), sl: num(raw.stop_loss), tp1: num(raw.tp1), tp2: num(raw.tp2),
+      plan: raw.plan_execution || {}, warnings: [], tradable: false };
+    if (s.isWait) return s;
+    if ([s.entry, s.sl, s.tp1].some(v => v === null)) { s.warnings.push({ block: true, text: "Faltan niveles en la respuesta. No operes esta señal." }); return s; }
+
+    const ordered = isBuy ? (s.sl < s.entry && s.entry < s.tp1 && (s.tp2 === null || s.tp1 < s.tp2))
+                          : (s.sl > s.entry && s.entry > s.tp1 && (s.tp2 === null || s.tp1 > s.tp2));
+    if (!ordered) s.warnings.push({ block: true, text: "Stop u objetivos del lado equivocado para esta dirección. Señal descartada." });
+
+    const read = num(tech?.current_price ?? tech?.last_price), ref = userPrice || read;
+    if (userPrice && read && Math.abs(read - userPrice) / userPrice > PRICE_TOLERANCE)
+      s.warnings.push({ block: true, text: `La IA leyó ${fmt(read)} pero el precio real es ${fmt(userPrice)}: probable error de escala. Señal descartada.` });
+    else if (ref && Math.abs(s.entry - ref) / ref > 0.02)
+      s.warnings.push({ block: false, text: `La entrada está a más del 2 % del precio actual (${fmt(ref)}).` });
+
+    const dist = Math.abs(s.entry - s.sl);
+    const balance = num($('rngBalance').value), riskUsd = balance * S.risk / 100;
+    const fitLots = Math.floor(riskUsd / (dist * OZ_PER_LOT) * 100) / 100;
+    s.lots = Math.max(MIN_LOT, Math.min(num(raw.recommended_lots) ?? fitLots, Math.max(fitLots, MIN_LOT)));
+    s.lossUsd = dist * s.lots * OZ_PER_LOT;
+    s.realPct = s.lossUsd / balance * 100;
+    if (s.realPct > S.risk * 1.1)
+      s.warnings.push({ block: !demo, text: `Con ${s.lots} lotes perderías $${s.lossUsd.toFixed(2)} (${s.realPct.toFixed(1)} %), más que tu ${S.risk} %. El stop es demasiado amplio para tu balance.` });
+    s.rMult = [s.tp1, s.tp2].map(t => t === null ? null : Math.abs(t - s.entry) / dist);
+
+    // Gestión escalonada: 60 % en TP1 si el lote lo permite; con 0.01, stop a breakeven + spread
+    s.orderType = raw.order_type || (action.includes('LIMIT') ? 'LIMIT' : 'MARKET');
+    s.split = s.lots >= 0.02;
+    s.lotsTp1 = s.split ? (num(raw.lots_tp1) || Math.max(MIN_LOT, Math.floor(s.lots * TP1_CLOSE * 100) / 100)) : 0;
+    s.bePrice = num(raw.breakeven_price) ?? +(s.entry + (isBuy ? 1 : -1) * BE_OFFSET).toFixed(2);
+
+    // Límite diario y bloqueo tras 2 stops seguidos
+    const dl = dailyStats();
+    if (!demo && dl.lockout) s.warnings.push({ block: true, text: "Bloqueo de riesgo: dos stops seguidos hoy. No se abren más operaciones hasta la próxima sesión." });
+    else if (!demo && dl.count >= S.maxTrades) s.warnings.push({ block: true, text: `Ya usaste las ${S.maxTrades} operaciones permitidas hoy. Mañana hay otra oportunidad.` });
+
+    // Horario de trading
+    const si = sessionInfo();
+    if (!si.active) s.warnings.push({ block: S.sess.only && !demo, text: `Fuera de tu horario (${si.label}). La próxima sesión abre ${countdown(si.start)}.` });
+    else if (si.end - Date.now() < PENDING_MIN * 60000) s.warnings.push({ block: false, text: `Tu sesión termina ${countdown(si.end)}. Si la orden no se activa antes, se cancelará.` });
+
+    // Escudo de noticias (Forex Factory)
+    const sh = shieldState();
+    if (sh.active) s.warnings.push({ block: !demo, text: `Noticia de ${sh.active.impact === 'High' ? 'alto' : 'medio'} impacto: ${sh.active.title} (${evTime(sh.active)}). No se opera dentro de ±${S.ffWindow} min.` });
+    else if (sh.next && sh.next.time - Date.now() < POSITION_MIN * 60000)
+      s.warnings.push({ block: false, text: `${sh.next.title} sale ${countdown(sh.next.time)}. Si la entrada se activa dentro de la ventana de la noticia, se bloqueará.` });
+    if (!S.ffOk) s.warnings.push({ block: false, text: "Sin datos de Forex Factory: el filtro de noticias no está protegiendo esta operación." });
+    s.tradable = !s.warnings.some(w => w.block);
+    return s;
+  }
+
+  // ======================= MOSTRAR OPERACIÓN =======================
+  function loadSetup(s) {
+    stopSim();
+    S.setup = s; S.hits = {}; S.log = []; S.tp1Hit = false; S.slActive = s.sl; S.flash = null; S.journalId = null;
+    S.createdAt = Date.now(); S.sessEndWarned = false;
+    S.phase = s.tradable ? 'waiting' : 'idle';
+    show('tradePanel');
+
+    const badge = $('resActionBadge'); show('resActionBadge');
+    const label = s.isWait ? "ESPERAR" : !s.tradable ? "NO OPERAR" : s.action;
+    badge.textContent = (s.demo ? "DEMO · " : "") + label;
+    badge.className = "font-mono text-xs font-black px-2.5 py-1 rounded-md border " + (!s.tradable
+      ? "bg-slate-500/20 text-slate-300 border-slate-500/30"
+      : s.isBuy ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-rose-500/20 text-rose-400 border-rose-500/30");
+    $('chartTitle').textContent = s.session ? `M15 · ${s.session}` : "Gráfico M15";
+
+    const wl = $('warnList'); wl.innerHTML = "";
+    s.warnings.forEach(w => { const d = document.createElement('div'); d.className = `text-xs rounded-lg p-2.5 border ${w.block ? 'bg-rose-950/30 border-rose-500/40 text-rose-200' : 'bg-amber-950/30 border-amber-500/40 text-amber-200'}`; d.textContent = w.text; wl.appendChild(d); });
+    wl.classList.toggle('hidden', !s.warnings.length);
+
+    $('resLots').textContent = s.lossUsd !== undefined ? `${s.lots} · −$${s.lossUsd.toFixed(2)} (${s.realPct.toFixed(1)} %)` : "—";
+    $('resRationale').textContent = s.isWait ? (s.rationale || "El gráfico no ofrece una oportunidad clara ahora.") : (s.rationale || "");
+    renderLevels();
+
+    if (s.tradable) addLog('info', 'Alarmas armadas', `Esperando ${s.isBuy ? 'compra' : 'venta'} en ${fmt(s.entry)}.`);
+    renderAlarms(); drawOverlay();
+  }
+
+  function renderLevels() {
+    const s = S.setup;
+    if (!s || s.isWait) { $('levelsTable').innerHTML = `<p class="text-xs text-slate-400">Sin niveles: la recomendación es esperar.</p>`; return; }
+    const rows = [
+      ['tp2', 'TP2', s.tp2, s.rMult?.[1] ? `+${s.rMult[1].toFixed(1)}R` : ''],
+      ['tp1', 'TP1', s.tp1, s.rMult?.[0] ? `+${s.rMult[0].toFixed(1)}R` : ''],
+      ['entry', s.isBuy ? 'Entrada (compra)' : 'Entrada (venta)', s.entry, ''],
+      ['sl', S.tp1Hit ? 'Stop (movido a BE)' : 'Stop', S.slActive ?? s.sl, '−1R'],
+    ].filter(r => r[2] !== null);
+    $('levelsTable').innerHTML = rows.map(([k, l, p, r]) => `
+      <div class="flex items-center justify-between rounded-lg px-3 py-2 bg-brand-surface border border-slate-800">
+        <span class="flex items-center gap-2 text-xs text-slate-300"><span class="w-2.5 h-2.5 rounded-sm" style="background:${COLORS[k]}"></span>${l}</span>
+        <span><strong class="text-white">${fmt(p)}</strong> <span class="text-[10px] text-slate-500 ml-1">${r}</span></span>
+      </div>`).join('');
+  }
+
+  // ======================= ALARMAS =======================
+  const PHASES = {
+    idle:       ['Sin operación', 'bg-slate-500/20 text-slate-300 border-slate-500/30'],
+    waiting:    ['Esperando entrada', 'bg-amber-500/15 text-amber-300 border-amber-500/30'],
+    inPosition: ['En posición', 'bg-sky-500/15 text-sky-300 border-sky-500/30'],
+    closed:     ['Cerrada', 'bg-slate-500/20 text-slate-200 border-slate-500/30'],
+    cancelled:  ['Cancelada', 'bg-slate-500/20 text-slate-400 border-slate-500/30'],
+  };
+
+  function renderAlarms() {
+    const s = S.setup;
+    const [pt, pc] = PHASES[S.phase];
+    const pb = $('phaseBadge');
+    if (s && s.tradable) { pb.textContent = pt; pb.className = `text-[11px] font-bold px-2.5 py-1 rounded-md border ${pc}`; show('phaseBadge'); } else hide('phaseBadge');
+
+    if (!s || !s.tradable) { $('alarmList').innerHTML = `<p class="text-xs text-slate-400">No hay alarmas activas para esta señal.</p>`; renderLog(); return; }
+
+    const minsLeft = Math.max(0, PENDING_MIN - Math.floor((Date.now() - S.createdAt) / 60000));
+    const posLeft = S.hits.entry ? Math.max(0, POSITION_MIN - Math.floor((Date.now() - S.hits.entry) / 60000)) : POSITION_MIN;
+    const st = (hitKey, needsPos) => S.hits[hitKey] ? ['Disparada', 'text-emerald-300', '✓']
+      : (S.phase === 'closed' || S.phase === 'cancelled') ? ['Inactiva', 'text-slate-500', '·']
+      : needsPos && S.phase !== 'inPosition' ? ['En espera', 'text-slate-400', '○'] : ['Armada', 'text-amber-300', '●'];
+    const rows = [
+      ['entry', s.isBuy ? '🟢 Compra' : '🔴 Venta', `al tocar ${fmt(s.entry)}`, st('entry', false)],
+      ['tp1', '🎯 TP1', s.split ? `${fmt(s.tp1)} → cerrar ${s.lotsTp1} (60 %) y stop a BE` : `${fmt(s.tp1)} → stop a BE + spread`, st('tp1', true)],
+      ...(s.tp2 !== null ? [['tp2', '🏁 TP2', `${fmt(s.tp2)} → cerrar todo`, st('tp2', true)]] : []),
+      ['sl', '🛑 Stop', `${fmt(S.slActive)}${S.tp1Hit ? ' (breakeven)' : ''}`, st('sl', true)],
+      newsAlarmRow(),
+      ['time', '⏱ Tiempo', S.phase === 'waiting' ? `orden válida ${minsLeft} min más (2 velas)` : S.phase === 'inPosition' ? `revisar avance en ${posLeft} min (8 velas)` : 'sin control de tiempo activo',
+        (S.hits.time || S.hits.timepos) ? ['Disparada', 'text-emerald-300', '✓'] : ['waiting', 'inPosition'].includes(S.phase) ? ['Armada', 'text-amber-300', '●'] : ['Inactiva', 'text-slate-500', '·']],
+    ];
+    $('alarmList').innerHTML = rows.map(([k, name, desc, [state, cls, icon]]) => `
+      <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-brand-surface border ${S.hits[k] ? 'border-emerald-500/40' : 'border-slate-800'}">
+        <div class="min-w-0"><span class="text-xs font-bold text-slate-200">${name}</span><span class="block text-[11px] font-mono text-slate-400 truncate">${desc}</span></div>
+        <span class="text-[11px] font-bold ${cls} whitespace-nowrap">${icon} ${state}</span>
+      </div>`).join('');
+    renderLog();
+  }
+
+  function renderLog() {
+    const icons = { entry: '🟢', tp: '🎯', sl: '🛑', be: '⚖️', warn: '⚠️', info: 'ℹ️' };
+    $('eventLog').innerHTML = S.log.length ? S.log.map(l => `
+      <li class="flex gap-2"><span class="font-mono text-slate-500">${hhmm(l.t)}</span><span>${icons[l.kind] || ''} <strong class="text-slate-200">${esc(l.title)}</strong> <span class="text-slate-400">${esc(l.body)}</span></span></li>`).join('')
+      : `<li class="text-slate-500">Sin eventos todavía.</li>`;
+  }
+  function addLog(kind, title, body) { S.log.unshift({ t: new Date(), kind, title, body }); }
+
+  function crossed(prev, cur, level) { return level !== null && Math.min(prev, cur) <= level && level <= Math.max(prev, cur); }
+
+  function onPrice(p) {
+    const prev = S.price; S.price = p;
+    $('tickerPrice').textContent = fmt(p);
+    if (document.activeElement !== $('inpPrice') && S.source !== 'manual') $('inpPrice').value = p.toFixed(2);
+    const s = S.setup;
+    if (s && s.tradable && prev !== null) {
+      const dir = s.isBuy ? 'Compra' : 'Venta';
+      if (S.phase === 'waiting') {
+        const sh = shieldState();
+        const touched = crossed(prev, p, s.entry) || Math.abs(p - s.entry) <= ENTRY_TOL;
+        if (touched && sh.active && !s.demo) {
+          S.phase = 'cancelled'; S.hits.news = Date.now();
+          alarm('warn', 'entry', 'Entrada bloqueada por noticia', `El precio tocó ${fmt(s.entry)} durante ${sh.active.title}. No entres; espera a que pase la volatilidad y vuelve a analizar.`);
+        } else if (touched) {
+          S.phase = 'inPosition'; S.hits.entry = Date.now();
+          alarm('entry', 'entry', `${dir} activada`, `Entrada ${fmt(s.entry)} con ${s.lots} lotes. Stop en ${fmt(s.sl)}.`);
+          journalOpen();
+        } else if (crossed(prev, p, s.tp1)) {
+          S.phase = 'cancelled';
+          alarm('warn', 'tp1', 'Entrada no activada', `El precio llegó a TP1 sin tocar ${fmt(s.entry)}. Cancela la orden pendiente.`);
+        }
+      } else if (S.phase === 'inPosition') {
+        if (crossed(prev, p, S.slActive)) {
+          S.phase = 'closed'; S.hits.sl = Date.now();
+          if (S.tp1Hit) {
+            alarm('be', 'sl', 'Salida en breakeven', s.split ? `El 40 % restante cerró en ${fmt(S.slActive)}. El 60 % ya se cobró en TP1.` : `Cierre en ${fmt(S.slActive)}: operación sin pérdida.`);
+            journalClose(s.split ? 'TP1' : 'BE');
+          }
+          else { alarm('sl', 'sl', 'Stop loss tocado', `Cierre en ${fmt(S.slActive)}. Pérdida aproximada de $${s.lossUsd.toFixed(2)}.`); journalClose('SL'); }
+        } else {
+          if (!S.tp1Hit && crossed(prev, p, s.tp1)) {
+            S.tp1Hit = true; S.hits.tp1 = Date.now(); S.slActive = s.bePrice;
+            alarm('tp', 'tp1', 'TP1 alcanzado', s.split
+              ? `Cierra ${s.lotsTp1} lotes (60 %) y mueve el stop a ${fmt(s.bePrice)} (breakeven + spread).`
+              : `Con 0.01 no se puede dividir: mueve el stop a ${fmt(s.bePrice)} (breakeven + spread) y deja correr hacia TP2.`);
+            renderLevels();
+            if (s.tp2 === null) { S.phase = 'closed'; journalClose('TP1'); }
+          }
+          if (S.phase === 'inPosition' && s.tp2 !== null && crossed(prev, p, s.tp2)) {
+            S.phase = 'closed'; S.hits.tp2 = Date.now();
+            alarm('tp', 'tp2', 'TP2 alcanzado', s.split ? 'Cierra el 40 % restante.' : 'Cierra la posición.');
+            journalClose('TP2');
+          }
+        }
+      }
+    }
+    renderAlarms(); drawOverlay();
+  }
+
+  // Controles de tiempo: orden pendiente (2 velas) y posición sin avance (8 velas)
+  setInterval(() => {
+    const s = S.setup;
+    if (s?.tradable && !s.demo && S.phase === 'waiting' && Date.now() - S.createdAt > PENDING_MIN * 60000) {
+      S.phase = 'cancelled'; S.hits.time = Date.now();
+      alarm('warn', null, 'Orden vencida', 'Pasaron 2 velas de 15 minutos sin entrada. Cancela la orden pendiente.');
+    }
+    if (s?.tradable && !s.demo && S.phase === 'inPosition' && !S.tp1Hit && !S.hits.timepos && S.price !== null && Date.now() - S.hits.entry > POSITION_MIN * 60000) {
+      const progress = (S.price - s.entry) / (s.tp1 - s.entry);
+      if (progress < 0.5) {
+        S.hits.timepos = Date.now();
+        alarm('warn', null, '8 velas sin avance', `El precio no avanzó ni la mitad del camino a TP1 (${Math.round(Math.max(0, progress) * 100)} %). Considera cerrar a mercado.`);
+      }
+    }
+    if (S.setup?.tradable) renderAlarms();
+  }, 15000);
+
+  function alarm(kind, lineKey, title, body) {
+    addLog(kind, title, body);
+    toast(kind, title, body);
+    playSound(kind);
+    if (lineKey) { S.flash = lineKey; setTimeout(() => { if (S.flash === lineKey) { S.flash = null; drawOverlay(); } }, 2200); }
+    try { if ('Notification' in window && Notification.permission === 'granted') new Notification(`Nova Gold · ${title}`, { body }); } catch {}
+    try { navigator.vibrate?.(kind === 'sl' ? [300, 100, 300] : [150, 80, 150]); } catch {}
+    if (S.tg && configured && !S.setup?.demo) {
+      const key = $('inpNotifyKey').value;
+      fetch(`${API}/api/v1/notify`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { 'X-Notify-Key': key } : {}) }, body: JSON.stringify({ title, body }) })
+        .catch(e => console.warn('Telegram', e));
+    }
+  }
+
+  function toast(kind, title, body) {
+    const tone = { entry: 'border-emerald-500/60', tp: 'border-emerald-500/60', sl: 'border-rose-500/60', be: 'border-sky-500/60', warn: 'border-amber-500/60', info: 'border-slate-600' }[kind] || 'border-slate-600';
+    const el = document.createElement('div');
+    el.className = `toast bg-slate-950/95 border-l-4 ${tone} border border-slate-800 rounded-xl p-3 shadow-2xl`;
+    el.innerHTML = `<p class="text-sm font-bold text-white">${esc(title)}</p><p class="text-xs text-slate-300 mt-0.5">${esc(body)}</p>`;
+    $('toasts').prepend(el);
+    setTimeout(() => el.remove(), kind === 'info' ? 3500 : 9000);
+  }
+
+  // Sonidos distintos para cada tipo de alarma
+  function playSound(kind) {
+    if (!S.audio) return;
+    const seq = { entry: [660, 880], tp: [784, 988, 1175], sl: [392, 262], be: [523, 523], warn: [440, 440, 440] }[kind];
+    if (!seq) return;
+    const t0 = S.audio.currentTime;
+    seq.forEach((f, i) => {
+      const o = S.audio.createOscillator(), g = S.audio.createGain();
+      o.type = kind === 'sl' ? 'square' : 'sine'; o.frequency.value = f;
+      const t = t0 + i * 0.18;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(g).connect(S.audio.destination); o.start(t); o.stop(t + 0.17);
+    });
+  }
+  $('btnAlerts').addEventListener('click', async () => {
+    try { S.audio = S.audio || new (window.AudioContext || window.webkitAudioContext)(); await S.audio.resume(); } catch {}
+    let perm = 'no disponible';
+    if ('Notification' in window) { try { perm = await Notification.requestPermission(); } catch {} }
+    playSound('entry');
+    $('btnAlerts').textContent = perm === 'granted' ? '🔔 Sonido y notificaciones activos' : '🔔 Sonido activo (notificaciones bloqueadas)';
+    $('btnAlerts').className = "w-full py-2.5 rounded-xl text-xs font-bold border border-emerald-500/40 text-emerald-300 bg-emerald-500/10";
+  });
+
+  // ======================= FOREX FACTORY =======================
+  const relevant = e => e.country === 'USD' && (e.impact === 'High' || (S.ffMedium && e.impact === 'Medium'));
+  const evTime = e => e.time.toLocaleString('es', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  function countdown(t) {
+    const m = Math.round((t - Date.now()) / 60000);
+    if (m < 0) return `hace ${fmtMins(-m)}`;
+    return m === 0 ? 'ahora' : `en ${fmtMins(m)}`;
+  }
+  const fmtMins = m => m >= 1440 ? `${Math.floor(m / 1440)} d ${Math.floor(m % 1440 / 60)} h` : m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
+
+  function shieldState() {
+    const now = Date.now(), w = S.ffWindow * 60000;
+    const rel = S.news.filter(relevant);
+    const active = rel.find(e => now >= e.time - w && now <= +e.time + w) || null;
+    const next = rel.filter(e => e.time > now).sort((a, b) => a.time - b.time)[0] || null;
+    return { active, next };
+  }
+
+  function normalizeFF(arr) {
+    if (!Array.isArray(arr)) throw new Error('formato');
+    return arr.map(e => ({ id: `${e.title}|${e.date}|${e.country}`, title: e.title, country: e.country, impact: e.impact,
+      time: new Date(e.date), forecast: e.forecast || '', previous: e.previous || '', actual: e.actual || '' }))
+      .filter(e => e.title && !isNaN(e.time));
+  }
+
+  async function loadCalendar(force = false) {
+    // 1) caché local (respeta el límite de Forex Factory)
+    try {
+      const c = JSON.parse(localStorage.getItem(FF_CACHE_KEY) || 'null');
+      if (c && !force && Date.now() - c.at < FF_CACHE_MS) { S.news = normalizeFF(c.data); S.ffOk = true; S.ffLastFetch = c.at; return afterCalendar('caché'); }
+    } catch {}
+    if (force && Date.now() - S.ffLastFetch < FF_MIN_GAP_MS) {
+      toast('info', 'Espera unos minutos', 'Forex Factory limita las descargas. El calendario se actualizó hace poco.'); return;
+    }
+    // 2) primero el proxy de tu backend (si existe), luego el feed directo
+    const sources = [...(configured ? [`${API}/api/v1/calendar`] : []), FF_URL];
+    for (const url of sources) {
+      try {
+        const r = await fetch(url, { cache: 'no-store' });
+        const txt = await r.text();
+        if (!r.ok || txt.trim().startsWith('<')) continue; // página HTML = límite excedido
+        const data = JSON.parse(txt);
+        S.news = normalizeFF(data); S.ffOk = true; S.ffLastFetch = Date.now();
+        try { localStorage.setItem(FF_CACHE_KEY, JSON.stringify({ at: S.ffLastFetch, data })); } catch {}
+        return afterCalendar(url === FF_URL ? 'Forex Factory' : 'tu servidor');
+      } catch (e) { console.warn('Calendario no disponible en', url, e); }
+    }
+    // Todas las fuentes fallaron: usar la última copia guardada (sirve toda la semana)
+    try {
+      const c = JSON.parse(localStorage.getItem(FF_CACHE_KEY) || 'null');
+      if (c && Date.now() - c.at < 7 * 86400000) {
+        S.news = normalizeFF(c.data); S.ffOk = true; S.ffLastFetch = c.at;
+        return afterCalendar(`copia guardada de ${new Date(c.at).toLocaleString('es', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`);
+      }
+    } catch {}
+    S.ffOk = S.news.length > 0;
+    afterCalendar(null);
+  }
+
+  function afterCalendar(src) {
+    const box = $('ffStatusBox');
+    if (!src && !S.ffOk) {
+      box.className = "rounded-xl p-3 border text-xs bg-rose-950/30 border-rose-500/40 text-rose-200";
+      box.textContent = "No se pudo conectar con Forex Factory. Si el navegador bloquea la conexión directa (CORS), añade el proxy /api/v1/calendar a tu backend.";
+    } else if (src) {
+      box.dataset.src = `Actualizado ${new Date(S.ffLastFetch).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })} desde ${src}.`;
+    }
+    updateShield();
+  }
+
+  function updateShield() {
+    const { active, next } = shieldState();
+    const badge = $('ffBadge'), box = $('ffStatusBox');
+    if (!S.ffOk) { badge.textContent = "Escudo FF: sin datos"; badge.className = "hidden md:block text-[10px] font-mono font-bold px-3 py-1.5 rounded-full border bg-rose-500/10 text-rose-300 border-rose-500/30"; renderNews(); return; }
+    const src = box.dataset.src || '';
+    if (active) {
+      badge.textContent = `Escudo FF: bloqueo · ${active.title}`;
+      badge.className = "hidden md:block text-[10px] font-mono font-bold px-3 py-1.5 rounded-full border bg-rose-500/15 text-rose-300 border-rose-500/40 animate-pulse";
+      box.className = "rounded-xl p-3 border text-xs bg-rose-950/30 border-rose-500/40 text-rose-100";
+      box.innerHTML = `<strong>Bloqueo activo.</strong> ${esc(active.title)} ${active.time > Date.now() ? 'sale' : 'salió'} ${countdown(active.time)}. No se abren operaciones hasta ${new Date(+active.time + S.ffWindow * 60000).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}.<span class="block text-[10px] text-rose-300/70 mt-1">${esc(src)}</span>`;
+    } else {
+      badge.textContent = next ? `Escudo FF: libre · próxima ${countdown(next.time)}` : "Escudo FF: libre";
+      badge.className = "hidden md:block text-[10px] font-mono font-bold px-3 py-1.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+      box.className = "rounded-xl p-3 border text-xs bg-emerald-950/20 border-emerald-500/30 text-emerald-100";
+      box.innerHTML = (next ? `Sin noticias en la ventana. Próxima: <strong>${esc(next.title)}</strong> ${countdown(next.time)}.` : "No quedan noticias relevantes esta semana. El calendario de la próxima semana se publica el domingo.") + `<span class="block text-[10px] text-emerald-300/60 mt-1">${esc(src)}</span>`;
+    }
+    preAlerts();
+    renderNews();
+    renderNewsTab();
+    renderDayMap();
+  }
+
+  // Aviso previo cuando se acerca una noticia con una operación abierta o pendiente
+  function preAlerts() {
+    const s = S.setup;
+    if (!s?.tradable || s.demo || !['waiting', 'inPosition'].includes(S.phase)) return;
+    const now = Date.now();
+    S.news.filter(relevant).forEach(e => {
+      const mins = (e.time - now) / 60000;
+      if (mins > 0 && mins <= S.ffWindow && !S.ffWarned[e.id]) {
+        S.ffWarned[e.id] = true;
+        const body = S.phase === 'waiting'
+          ? `Cancela la orden pendiente: si se activa durante la noticia puede entrar con deslizamiento.`
+          : `Protege la posición: considera cerrar parcial o ajustar el stop antes de la publicación.`;
+        alarm('warn', null, `${e.title} ${countdown(e.time)}`, body);
+      }
+    });
+  }
+
+  function renderNews() {
+    const now = Date.now(), w = S.ffWindow * 60000;
+    const items = S.news.filter(relevant).filter(e => +e.time + w >= now).sort((a, b) => a.time - b.time).slice(0, 3);
+    if (!S.ffOk) { $('ffList').innerHTML = ''; return; }
+    $('ffList').innerHTML = items.length ? items.map(e => {
+      const inWin = now >= e.time - w && now <= +e.time + w;
+      const dot = e.impact === 'High' ? '#F43F5E' : '#F59E0B';
+      const nums = [e.forecast && `Prev. ${esc(e.forecast)}`, e.previous && `Ant. ${esc(e.previous)}`, e.actual && `Real ${esc(e.actual)}`].filter(Boolean).join(' · ');
+      return `<li class="rounded-lg px-3 py-2 border ${inWin ? 'border-rose-500/50 bg-rose-950/30' : 'border-slate-800 bg-brand-surface'}">
+        <div class="flex items-center justify-between gap-2">
+          <span class="flex items-center gap-2 text-xs font-bold text-slate-200 min-w-0"><span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${dot}" title="Impacto ${e.impact === 'High' ? 'alto' : 'medio'}"></span><span class="truncate">${esc(e.title)}</span></span>
+          <span class="text-[11px] font-mono ${inWin ? 'text-rose-300' : 'text-slate-400'} whitespace-nowrap">${countdown(e.time)}</span>
+        </div>
+        <span class="block text-[10px] font-mono text-slate-500 mt-0.5">${esc(evTime(e))}${nums ? ' · ' + nums : ''}</span>
+      </li>`;
+    }).join('') : `<li class="text-xs text-slate-500">No hay noticias USD pendientes en el calendario de esta semana.</li>`;
+  }
+
+  function newsAlarmRow() {
+    const { active, next } = shieldState();
+    const closed = S.phase === 'closed' || S.phase === 'cancelled';
+    if (!S.ffOk) return ['news', '📰 Noticias', 'sin datos de Forex Factory', ['Sin datos', 'text-rose-300', '!']];
+    if (S.hits.news) return ['news', '📰 Noticias', 'entrada bloqueada por noticia', ['Disparada', 'text-emerald-300', '✓']];
+    if (active) return ['news', '📰 Noticias', `${active.title} · bloqueo activo`, [closed ? 'Inactiva' : 'Bloqueando', closed ? 'text-slate-500' : 'text-rose-300', closed ? '·' : '■']];
+    return ['news', '📰 Noticias', next ? `${next.title} ${countdown(next.time)}` : 'sin noticias pendientes', closed ? ['Inactiva', 'text-slate-500', '·'] : ['Vigilando', 'text-amber-300', '●']];
+  }
+
+  $('btnFFRefresh').addEventListener('click', () => loadCalendar(true));
+  $('selFFWindow').addEventListener('change', e => { S.ffWindow = +e.target.value; updateShield(); if (S.setup) renderAlarms(); });
+  $('chkFFMedium').addEventListener('change', e => { S.ffMedium = e.target.checked; updateShield(); if (S.setup) renderAlarms(); });
+  setInterval(updateShield, 30000);          // cuenta regresiva y avisos previos
+  setInterval(() => loadCalendar(), FF_CACHE_MS); // refresco horario (usa la caché si es reciente)
+
+  // ======================= HORARIO DE TRADING =======================
+  // Offset (ms) de una zona horaria en un instante dado
+  function tzOffset(tz, ts) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      .formatToParts(new Date(ts)).filter(x => x.type !== 'literal').map(x => [x.type, +x.value]));
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - ts;
+  }
+  // Instante real de "hh:mm" en una zona horaria, para la fecha (y, m, d) de esa zona
+  function wallToInstant(tz, y, m, d, hh, mm) { const guess = Date.UTC(y, m - 1, d, hh, mm); return guess - tzOffset(tz, guess); }
+  function tzDateParts(tz, ts) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' })
+      .formatToParts(new Date(ts)).filter(x => x.type !== 'literal').map(x => [x.type, x.value]));
+    return { y: +p.year, m: +p.month, d: +p.day, wd: p.weekday };
+  }
+  const hm = t => t.split(':').map(Number);
+  const localTime = ts => new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+  const tzLabel = () => (Intl.DateTimeFormat().resolvedOptions().timeZone === EC_TZ ? 'hora Ecuador' : 'tu hora local');
+  const sessTz = () => S.sess.mode === 'ny' ? NY_TZ : EC_TZ;
+
+  // Ventanas de trading del día que contiene dayTs
+  function windowsFor(dayTs) {
+    const tz = sessTz(), p = tzDateParts(tz, dayTs);
+    const [sh, sm] = hm(S.sess.start), [eh, em] = hm(S.sess.end);
+    const ws = [{ start: wallToInstant(tz, p.y, p.m, p.d, sh, sm), end: wallToInstant(tz, p.y, p.m, p.d, eh, em), wd: p.wd, name: 'Sesión de Nueva York' }];
+    if (S.sess.london) {
+      const q = tzDateParts(EC_TZ, dayTs); // apertura de Londres: 08:00–11:30 hora de Londres (02:00–05:30 Ecuador en verano)
+      ws.unshift({ start: wallToInstant('Europe/London', q.y, q.m, q.d, 8, 0), end: wallToInstant('Europe/London', q.y, q.m, q.d, 11, 30), wd: q.wd, name: 'Apertura de Londres' });
+    }
+    return ws;
+  }
+  // Hora de Ecuador a la que abre hoy Nueva York (08:00 NY)
+  function nyOpenInEcuador() {
+    const p = tzDateParts(NY_TZ, Date.now());
+    return new Date(wallToInstant(NY_TZ, p.y, p.m, p.d, 8, 0)).toLocaleTimeString('es', { timeZone: EC_TZ, hour: '2-digit', minute: '2-digit' });
+  }
+  function sessionInfo(now = Date.now()) {
+    for (let i = 0; i < 8; i++) {
+      for (const w of windowsFor(now + i * 86400000)) {
+        if (w.wd === 'Sat' || w.wd === 'Sun') continue;
+        if (w.end > now) return { active: now >= w.start, start: w.start, end: w.end, name: w.name, label: `${localTime(w.start)}–${localTime(w.end)} ${tzLabel()}` };
+      }
+    }
+    return { active: false, start: now, end: now, name: '', label: '' };
+  }
+  const inSession = ts => windowsFor(ts).some(w => w.wd !== 'Sat' && w.wd !== 'Sun' && ts >= w.start && ts <= w.end);
+
+  function updateSession() {
+    const si = sessionInfo();
+    const b = $('sessBadge'), box = $('sessBox');
+    if (si.active) {
+      b.textContent = `Sesión abierta · cierra ${countdown(si.end)}`;
+      b.className = "px-3 py-1.5 rounded-full border bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
+      box.className = "rounded-xl p-3 border text-xs bg-emerald-950/20 border-emerald-500/30 text-emerald-100";
+      box.innerHTML = `<strong>${esc(si.name)} abierta.</strong> Hoy ${esc(si.label)}. Cierra ${countdown(si.end)}.`;
+    } else {
+      b.textContent = `Sesión cerrada · abre ${countdown(si.start)}`;
+      b.className = "px-3 py-1.5 rounded-full border bg-slate-800 text-slate-400 border-slate-700";
+      box.className = "rounded-xl p-3 border text-xs bg-slate-800/50 border-slate-700 text-slate-300";
+      box.innerHTML = `<strong>Fuera de horario.</strong> Próxima: ${esc(si.name)}, ${new Date(si.start).toLocaleDateString('es', { weekday: 'long' })} ${esc(si.label)} (${countdown(si.start)}).`;
+    }
+    box.innerHTML += S.sess.mode === 'fixed'
+      ? `<span class="block text-[10px] opacity-70 mt-1">Hoy la sesión de Nueva York (8:00 NY) empieza a las ${nyOpenInEcuador()} de Ecuador. Cuando EE. UU. cambia de horario (marzo y noviembre) esa hora se mueve una hora; con la referencia "Nueva York" tu sesión la sigue sola.</span>`
+      : `<span class="block text-[10px] opacity-70 mt-1">Horas escritas en hora de Nueva York; se muestran convertidas a ${tzLabel()}.</span>`;
+    document.querySelectorAll('.sess-tz').forEach(el => el.textContent = S.sess.mode === 'ny' ? '(Nueva York)' : '(Ecuador)');
+
+    // Avisos de apertura y cierre
+    if (S.sessWasActive === false && si.active) { toast('info', 'Abrió tu sesión de trading', `Hasta las ${localTime(si.end)}. Buen momento para analizar el gráfico M15.`); playSound('be'); }
+    S.sessWasActive = si.active;
+    const s = S.setup;
+    if (s?.tradable && !s.demo && !S.sessEndWarned && ['waiting', 'inPosition'].includes(S.phase) && !si.active && Date.now() - S.createdAt > 60000) {
+      S.sessEndWarned = true;
+      if (S.phase === 'waiting') { S.phase = 'cancelled'; S.hits.time = Date.now(); alarm('warn', null, 'Terminó tu sesión', 'La orden no se activó dentro del horario. Cancela la orden pendiente.'); }
+      else alarm('warn', null, 'Terminó tu sesión', 'Tienes una posición abierta: decide si la cierras o la dejas con su stop.');
+      renderAlarms();
+    }
+  }
+  function loadSess() { try { Object.assign(S.sess, JSON.parse(localStorage.getItem(SESS_KEY) || '{}')); } catch {}
+    $('chkLondon').checked = !!S.sess.london;
+    $('selSessMode').value = S.sess.mode; $('inpSessStart').value = S.sess.start; $('inpSessEnd').value = S.sess.end; $('chkSessOnly').checked = S.sess.only; }
+  function saveSess() { try { localStorage.setItem(SESS_KEY, JSON.stringify(S.sess)); } catch {} updateSession(); renderNewsTab(); }
+  $('selSessMode').addEventListener('change', e => {
+    // Convierte las horas escritas para que la sesión siga siendo la misma al cambiar de referencia
+    const w = sessionFor(Date.now());
+    S.sess.mode = e.target.value;
+    const conv = ts => new Date(ts).toLocaleTimeString('en-GB', { timeZone: sessTz(), hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    S.sess.start = conv(w.start); S.sess.end = conv(w.end);
+    $('inpSessStart').value = S.sess.start; $('inpSessEnd').value = S.sess.end;
+    saveSess();
+  });
+  $('inpSessStart').addEventListener('change', e => { if (e.target.value) { S.sess.start = e.target.value; saveSess(); } });
+  $('inpSessEnd').addEventListener('change', e => { if (e.target.value) { S.sess.end = e.target.value; saveSess(); } });
+  $('chkSessOnly').addEventListener('change', e => { S.sess.only = e.target.checked; saveSess(); });
+  $('chkLondon').addEventListener('change', e => { S.sess.london = e.target.checked; saveSess(); renderDayMap(); });
+
+  // Cuenta regresiva de la vela M15
+  setInterval(() => {
+    const now = Date.now(), next = Math.ceil((now + 1) / 900000) * 900000, left = Math.floor((next - now) / 1000);
+    $('candleCd').textContent = `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`;
+  }, 1000);
+  setInterval(() => { updateSession(); renderDayMap(); }, 30000);
+
+  // ======================= MAPA DEL DÍA =======================
+  function marketPhases(y, m, d) {
+    const L = (h, mi = 0) => wallToInstant('Europe/London', y, m, d, h, mi), N = (h, mi = 0) => wallToInstant(NY_TZ, y, m, d, h, mi);
+    const dayStart = wallToInstant(EC_TZ, y, m, d, 0, 0), dayEnd = dayStart + 86400000;
+    const wd = tzDateParts(EC_TZ, dayStart + 43200000).wd;
+    const C = { asia: '#334155', london: '#0EA5E9', pause: '#78716C', overlap: '#10B981', ny_pm: '#6366F1', brk: '#1E293B', closed: '#111827' };
+    if (wd === 'Sat') return { dayStart, dayEnd, segs: [[dayStart, dayEnd, 'closed', 'Mercado cerrado', C.closed]] };
+    if (wd === 'Sun') return { dayStart, dayEnd, segs: [[dayStart, N(18), 'closed', 'Mercado cerrado', C.closed], [N(18), dayEnd, 'asia', 'Asia · no operar', C.asia]] };
+    const segs = [
+      [dayStart, L(8), 'asia', 'Asia · no operar', C.asia], [L(8), L(11, 30), 'london', 'Apertura de Londres', C.london],
+      [L(11, 30), N(8), 'pause', 'Pausa europea', C.pause], [N(8), L(16, 30), 'overlap', 'Solapamiento Londres/NY', C.overlap],
+      [L(16, 30), N(16), 'ny_pm', 'Tarde de Nueva York', C.ny_pm], [N(16), N(18), 'brk', 'Cierre diario', C.brk], [N(18), dayEnd, 'asia', 'Asia · no operar', C.asia]];
+    if (wd === 'Fri') { segs[5] = [N(16), N(17), 'brk', 'Cierre semanal', C.brk]; segs[6] = [N(17), dayEnd, 'closed', 'Mercado cerrado', C.closed]; }
+    return { dayStart, dayEnd, segs: segs.filter(x => x[1] > x[0]) };
+  }
+  function renderDayMap() {
+    const now = Date.now(), p = tzDateParts(EC_TZ, now);
+    const { dayStart, dayEnd, segs } = marketPhases(p.y, p.m, p.d);
+    const pct = t => Math.max(0, Math.min(100, (t - dayStart) / (dayEnd - dayStart) * 100));
+    const cur = segs.find(x => now >= x[0] && now < x[1]);
+    $('dayMapNow').textContent = cur ? `· ahora: ${cur[3]}` : '';
+    const out = [];
+    segs.forEach(([a, b, k, label, c]) => out.push(`<div class="absolute top-0 h-8 flex items-center justify-center overflow-hidden text-[10px] font-bold text-white/85 border-r border-brand-card" style="left:${pct(a)}%;width:${pct(b) - pct(a)}%;background:${c}" title="${esc(label)}: ${localTime(a)}–${localTime(b)}"><span class="truncate px-1">${pct(b) - pct(a) > 9 ? esc(label) : ''}</span></div>`));
+    windowsFor(now).filter(w => w.wd !== 'Sat' && w.wd !== 'Sun').forEach(w => out.push(`<div class="absolute top-0 h-8 border-2 border-amber-400 rounded-sm pointer-events-none" style="left:${pct(w.start)}%;width:${pct(w.end) - pct(w.start)}%" title="Tu horario: ${localTime(w.start)}–${localTime(w.end)}"></div>`));
+    S.news.filter(e => e.country === 'USD' && (e.impact === 'High' || (S.ffMedium && e.impact === 'Medium')) && e.time >= dayStart && e.time < dayEnd)
+      .forEach(e => out.push(`<div class="absolute -top-1 h-10 w-0.5 ${e.impact === 'High' ? 'bg-rose-500' : 'bg-amber-400'}" style="left:${pct(+e.time)}%" title="${esc(localTime(+e.time))} ${esc(e.title)}"></div>`));
+    out.push(`<div class="absolute -top-1 h-10 w-0.5 bg-white" style="left:${pct(now)}%"><span class="absolute -top-4 -translate-x-1/2 text-[9px] font-mono font-bold text-white whitespace-nowrap">${localTime(now)}</span></div>`);
+    for (let h = 0; h <= 24; h += 3) out.push(`<span class="absolute top-9 -translate-x-1/2 text-[10px] font-mono text-slate-500" style="left:${h / 24 * 100}%">${String(h % 24).padStart(2, '0')}</span>`);
+    $('dayMap').innerHTML = out.join('');
+  }
+
+  // ======================= PESTAÑAS =======================
+  function setTab(t) {
+    S.tab = t;
+    $('tabTrade').classList.toggle('hidden', t !== 'trade');
+    $('tabNews').classList.toggle('hidden', t !== 'news');
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      const on = b.dataset.tab === t;
+      b.setAttribute('aria-selected', on);
+      b.className = "tab-btn px-4 py-2 rounded-lg text-sm font-bold " + (on ? "bg-amber-500/15 text-brand-goldLight" : "text-slate-400 hover:text-slate-200");
+    });
+    if (t === 'trade') drawOverlay(); else renderNewsTab();
+  }
+  document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  document.querySelectorAll('.go-news').forEach(b => b.addEventListener('click', () => { setTab('news'); window.scrollTo({ top: 0 }); }));
+
+  // ======================= PESTAÑA NOTICIAS =======================
+  // Qué suele significar cada dato para el oro. inverse = un valor más alto es malo para la economía de EE. UU.
+  const GOLD_NOTES = [
+    ['Non-Farm', false, 'Nóminas no agrícolas: el dato más volátil del mes para el oro. Mucho empleo → dólar fuerte → el oro suele bajar.'],
+    ['Unemployment Rate', true, 'Tasa de desempleo. Más desempleo → se esperan recortes de tasas → el oro suele subir.'],
+    ['Unemployment Claims', true, 'Solicitudes semanales de subsidio por desempleo. Más solicitudes → economía más débil → apoyo para el oro.'],
+    ['ADP', false, 'Empleo privado (ADP). Anticipa las nóminas del viernes.'],
+    ['JOLTS', false, 'Vacantes de empleo. Un mercado laboral fuerte favorece al dólar.'],
+    ['Core PCE', false, 'Inflación preferida por la Fed. Inflación alta → Fed más dura → presión para el oro.'],
+    ['PCE', false, 'Inflación del gasto personal. Inflación alta → Fed más dura → presión para el oro.'],
+    ['Core CPI', false, 'Inflación subyacente al consumidor: de los datos que más mueven el oro. Inflación alta → presión bajista.'],
+    ['CPI', false, 'Inflación al consumidor. Inflación alta → Fed más dura → el oro suele bajar a corto plazo.'],
+    ['PPI', false, 'Inflación al productor. Anticipa presiones de precios.'],
+    ['Federal Funds Rate', false, 'Decisión de tasas de la Fed. Evento de máxima volatilidad; importa más el tono que la cifra.'],
+    ['FOMC', false, 'Comunicación de la Fed. El mercado reacciona al tono: duro presiona al oro, suave lo impulsa.'],
+    ['Fed Chair', false, 'Discurso del presidente de la Fed. Sin cifra: la reacción depende del tono.'],
+    ['GDP', false, 'Crecimiento de la economía. Crecimiento fuerte → dólar fuerte → presión para el oro.'],
+    ['Retail Sales', false, 'Ventas minoristas: mide el consumo. Dato fuerte favorece al dólar.'],
+    ['ISM', false, 'Encuesta de actividad (ISM). Por encima de 50 es expansión; dato fuerte favorece al dólar.'],
+    ['Durable Goods', false, 'Pedidos de bienes duraderos. Dato fuerte favorece al dólar.'],
+    ['Consumer Sentiment', false, 'Confianza del consumidor. Mueve más por sus expectativas de inflación.'],
+    ['Consumer Confidence', false, 'Confianza del consumidor. Dato fuerte favorece al dólar.'],
+  ];
+  const noteFor = e => e.country === 'USD' ? GOLD_NOTES.find(([k]) => e.title.includes(k)) : null;
+  const numVal = v => { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return Number.isFinite(n) ? n : null; };
+
+  function goldVerdict(e) {
+    const note = noteFor(e); if (!note || !e.actual || !e.forecast) return null;
+    const a = numVal(e.actual), f = numVal(e.forecast); if (a === null || f === null) return null;
+    if (a === f) return ['En línea con lo previsto: poco efecto esperado', 'text-slate-300'];
+    const usdStrong = note[1] ? a < f : a > f;
+    return usdStrong ? ['Dato favorable al dólar: presión bajista habitual para el oro', 'text-rose-300'] : ['Dato débil para el dólar: sesgo alcista habitual para el oro', 'text-emerald-300'];
+  }
+
+  function newsFilter(e) {
+    const cur = $('fltCur').value, imp = $('fltImp').value;
+    if (cur === 'USD' && e.country !== 'USD') return false;
+    if (imp === 'High' && e.impact !== 'High') return false;
+    if (imp === 'Medium' && !['High', 'Medium'].includes(e.impact)) return false;
+    if (!$('fltPast').checked && +e.time + 60 * 60000 < Date.now()) return false;
+    return true;
+  }
+
+  function renderNewsTab() {
+    const cnt = $('tabNewsCount');
+    const todayHigh = S.news.filter(e => e.country === 'USD' && e.impact === 'High' && e.time > Date.now() && e.time - Date.now() < 86400000).length;
+    cnt.textContent = todayHigh; cnt.classList.toggle('hidden', !todayHigh);
+    if (S.tab !== 'news') return;
+
+    $('newsSrc').textContent = S.ffOk ? `Calendario de esta semana según Forex Factory. ${$('ffStatusBox').dataset.src || ''}` : 'No hay conexión con el calendario de Forex Factory. Usa los enlaces para consultarlo directamente.';
+
+    // Reseña de la semana
+    const now = Date.now();
+    const usdHigh = S.news.filter(e => e.country === 'USD' && e.impact === 'High');
+    const upcoming = usdHigh.filter(e => e.time > now).sort((a, b) => a.time - b.time);
+    const inMySess = upcoming.filter(e => inSession(+e.time));
+    const published = usdHigh.filter(e => e.actual);
+    const key = upcoming.find(e => noteFor(e)) || upcoming[0];
+    $('weekSummary').innerHTML = !S.ffOk ? `<p class="text-sm text-slate-300">Sin datos del calendario. Consulta Forex Factory con los enlaces de arriba.</p>` : `
+      <h3 class="text-sm font-bold text-slate-300 mb-3">Reseña de la semana para el oro</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div class="bg-brand-surface border border-slate-800 rounded-xl p-3"><span class="block text-2xl font-extrabold text-white">${upcoming.length}</span><span class="text-xs text-slate-400">noticias USD de alto impacto pendientes</span></div>
+        <div class="bg-brand-surface border ${inMySess.length ? 'border-rose-500/40' : 'border-slate-800'} rounded-xl p-3"><span class="block text-2xl font-extrabold ${inMySess.length ? 'text-rose-300' : 'text-white'}">${inMySess.length}</span><span class="text-xs text-slate-400">caen dentro de tu horario de trading</span></div>
+        <div class="bg-brand-surface border border-slate-800 rounded-xl p-3"><span class="block text-2xl font-extrabold text-white">${published.length}</span><span class="text-xs text-slate-400">ya publicadas esta semana</span></div>
+      </div>
+      ${key ? `<p class="text-sm text-slate-200 leading-relaxed"><strong class="text-brand-goldLight">La más importante que viene:</strong> ${esc(key.title)}, ${esc(evTime(key))} (${countdown(key.time)}).${noteFor(key) ? ' ' + esc(noteFor(key)[2]) : ''}</p>` : `<p class="text-sm text-slate-300">No quedan noticias de alto impacto del dólar esta semana. El calendario de la próxima se publica el domingo.</p>`}
+      ${inMySess.length ? `<p class="text-xs text-rose-200 mt-2">Ojo: ${inMySess.map(e => esc(e.title)).join(', ')} ${inMySess.length > 1 ? 'caen' : 'cae'} en tu horario. El escudo bloqueará las entradas ±${S.ffWindow} min alrededor.</p>` : ''}`;
+
+    // Lista por día
+    const list = S.news.filter(newsFilter).sort((a, b) => a.time - b.time);
+    const byDay = {};
+    list.forEach(e => { const k = e.time.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' }); (byDay[k] = byDay[k] || []).push(e); });
+    const flag = { USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵', CNY: '🇨🇳', AUD: '🇦🇺', CAD: '🇨🇦', CHF: '🇨🇭', NZD: '🇳🇿', ALL: '🌐' };
+    const w = S.ffWindow * 60000;
+    $('newsDays').innerHTML = !S.ffOk ? '' : Object.keys(byDay).length ? Object.entries(byDay).map(([day, evs]) => `
+      <section>
+        <h3 class="text-xs font-bold text-slate-400 mb-2 first-letter:uppercase">${esc(day)}</h3>
+        <div class="bg-brand-card border border-brand-border rounded-2xl divide-y divide-slate-800">
+          ${evs.map(e => {
+            const note = noteFor(e), verdict = goldVerdict(e);
+            const dot = e.impact === 'High' ? '#F43F5E' : e.impact === 'Medium' ? '#F59E0B' : e.impact === 'Low' ? '#FACC15' : '#64748B';
+            const live = now >= e.time - w && now <= +e.time + w;
+            const past = e.time < now;
+            const tags = [inSession(+e.time) && e.country === 'USD' ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">En tu horario</span>' : '',
+              live && relevant(e) ? '<span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">Bloqueo activo</span>' : ''].join(' ');
+            return `<details class="group p-4 ${past ? 'opacity-70' : ''}">
+              <summary class="flex items-center gap-3 cursor-pointer list-none">
+                <span class="font-mono text-xs text-slate-400 w-12 flex-shrink-0">${esc(e.time.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }))}</span>
+                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${dot}" title="Impacto ${esc(e.impact)}"></span>
+                <span class="text-xs flex-shrink-0">${flag[e.country] || ''} <span class="font-mono text-slate-400">${esc(e.country)}</span></span>
+                <span class="text-sm font-semibold text-slate-100 flex-1 min-w-0">${esc(e.title)} <span class="text-[10px] font-mono">${tags}</span></span>
+                <span class="hidden sm:flex gap-3 font-mono text-[11px] text-slate-400 flex-shrink-0">
+                  <span>Real <strong class="text-white">${esc(e.actual || '—')}</strong></span><span>Prev. ${esc(e.forecast || '—')}</span><span>Ant. ${esc(e.previous || '—')}</span>
+                </span>
+                <span class="text-slate-500 group-open:rotate-90 transition">›</span>
+              </summary>
+              <div class="mt-3 ml-[3.75rem] space-y-1.5 text-xs text-slate-300 leading-relaxed">
+                <p class="sm:hidden font-mono text-slate-400">Real ${esc(e.actual || '—')} · Previsto ${esc(e.forecast || '—')} · Anterior ${esc(e.previous || '—')}</p>
+                ${verdict ? `<p class="font-bold ${verdict[1]}">${verdict[0]}.</p>` : ''}
+                <p>${note ? esc(note[2]) : e.country === 'USD' ? 'Dato del dólar: su publicación puede generar volatilidad en el oro.' : 'Afecta principalmente a su moneda; impacto indirecto en el oro.'}</p>
+                <p class="text-slate-500">${past ? 'Publicada' : 'Se publica'} ${countdown(e.time)}.</p>
+              </div>
+            </details>`;
+          }).join('')}
+        </div>
+      </section>`).join('') : `<p class="text-sm text-slate-400">No hay noticias con estos filtros. Prueba a mostrar las ya publicadas o a incluir más monedas.</p>`;
+  }
+  ['fltCur', 'fltImp', 'fltPast'].forEach(id => $(id).addEventListener('change', renderNewsTab));
+
+  // ======================= FUENTE DE PRECIO =======================
+  async function fetchPrice() {
+    try {
+      const r = await fetch(PRICE_URL, { cache: 'no-store' });
+      const d = await r.json();
+      const p = num(d.price ?? d.rate ?? d.data?.price);
+      if (!p) throw new Error('sin precio');
+      $('feedDot').className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+      $('tickerSrc').textContent = 'en vivo';
+      $('feedStatus').textContent = `Precio spot actualizado a las ${hhmm(new Date())}. Puede diferir unos centavos del de tu bróker.`;
+      onPrice(p);
+    } catch (e) {
+      $('feedDot').className = "w-2 h-2 rounded-full bg-rose-500";
+      $('feedStatus').textContent = "No se pudo obtener el precio automático. Cambia a modo manual.";
+    }
+  }
+  function startFeed() {
+    clearInterval(S.feedTimer);
+    if (S.source === 'auto') { fetchPrice(); S.feedTimer = setInterval(fetchPrice, PRICE_POLL_MS); }
+    else { $('feedDot').className = "w-2 h-2 rounded-full bg-amber-400"; $('tickerSrc').textContent = S.source === 'sim' ? 'simulado' : 'manual';
+      $('feedStatus').textContent = S.source === 'sim' ? "Precio simulado para la demostración." : "Escribe el precio y pulsa Fijar (o Enter) cada vez que cambie."; }
+  }
+  $('selSource').addEventListener('change', e => { S.source = e.target.value; startFeed(); });
+  $('btnSetPrice').addEventListener('click', () => { const p = num($('inpPrice').value); if (p) onPrice(p); });
+  $('inpPrice').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnSetPrice').click(); });
+
+  // ======================= DEMOSTRACIÓN =======================
+  $('btnDemo').addEventListener('click', () => {
+    if (!S.file) { toast('info', 'Primero sube un gráfico', 'La demostración dibuja una operación de ejemplo sobre tu captura.'); return $('fileInput').click(); }
+    if (!calibrated()) { S.pendingDemo = true; toast('info', 'Calibra el eje', 'Marca dos precios del eje para situar la operación de ejemplo.'); return startCalib(); }
+    runDemo();
+  });
+
+  function runDemo() {
+    const mid = yToPrice(0.5), range = Math.abs(yToPrice(0.1) - yToPrice(0.9)), a = range * 0.06;
+    const entry = +(mid - a * 0.5).toFixed(2), sl = +(entry - a * 1.2).toFixed(2);
+    const raw = { action: 'BUY LIMIT', entry_price: entry, stop_loss: sl, tp1: +(entry + a * 1.2 * 1.8).toFixed(2), tp2: +(entry + a * 1.2 * 3).toFixed(2) };
+    const s = buildSetup(raw, {}, null, true);
+    s.rationale = "Ejemplo ilustrativo generado a partir de la escala de tu gráfico. No es una señal real ni un análisis de la captura.";
+    s.session = "Demostración";
+    S.source = 'sim'; $('selSource').value = 'sim'; $('selSource').disabled = true; startFeed();
+    S.price = null; loadSetup(s); onPrice(+(mid + a * 0.4).toFixed(2));
+    show('btnSim');
+  }
+
+  $('btnSim').addEventListener('click', () => {
+    const s = S.setup; if (!s?.demo) return;
+    if (S.phase !== 'waiting') { runDemo(); }
+    const d = S.setup, a = Math.abs(d.entry - d.sl);
+    const win = Math.random() < 0.6;
+    const pts = [S.price, d.entry - a * 0.15, ...(win ? [d.tp1 + a * 0.1, d.entry + a * 0.4, d.tp2 + a * 0.1] : [d.entry + a * 0.5, d.sl - a * 0.1])];
+    const path = [];
+    for (let i = 0; i < pts.length - 1; i++) for (let k = 1; k <= 10; k++)
+      path.push(pts[i] + (pts[i + 1] - pts[i]) * k / 10 + (k < 10 ? (Math.random() - 0.5) * a * 0.15 : 0));
+    stopSim(); $('btnSim').disabled = true;
+    S.simTimer = setInterval(() => { if (!path.length) return stopSim(); onPrice(+path.shift().toFixed(2)); }, 450);
+  });
+  function stopSim() { clearInterval(S.simTimer); S.simTimer = null; $('btnSim').disabled = false; }
+
+  function resetTrade() {
+    stopSim();
+    S.setup = null; S.phase = 'idle'; S.hits = {}; S.log = []; S.tp1Hit = false; S.slActive = null;
+    hide('tradePanel'); hide('resActionBadge'); hide('phaseBadge'); hide('btnSim');
+    $('chartTitle').textContent = "Gráfico M15";
+    if (S.source === 'sim') { S.source = 'auto'; $('selSource').value = 'auto'; $('selSource').disabled = false; S.price = null; startFeed(); }
+    drawOverlay();
+  }
+
+  // ======================= COPIAR NIVELES =======================
+  $('btnCopy').addEventListener('click', async () => {
+    const s = S.setup; if (!s || s.isWait) return;
+    const txt = [`XAU/USD ${s.action}${s.demo ? ' (DEMO)' : ''}`, `Entrada: ${fmt(s.entry)}`, `Stop: ${fmt(s.sl)}`, `TP1: ${fmt(s.tp1)}`, s.tp2 !== null ? `TP2: ${fmt(s.tp2)}` : null,
+      `Lotes: ${s.lots}`, `Al tocar TP1: stop a breakeven`, `Cancelar si no entra en 8 velas M15`].filter(Boolean).join('\n');
+    try { await navigator.clipboard.writeText(txt); toast('info', 'Niveles copiados', 'Pégalos al crear las alertas en tu plataforma.'); }
+    catch { toast('warn', 'No se pudo copiar', txt); }
+  });
+
+  // ======================= DIARIO =======================
+  const loadJ = () => { try { return JSON.parse(localStorage.getItem(JOURNAL_KEY)) || []; } catch { return []; } };
+  const saveJ = j => { try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(j)); } catch {} };
+  function journalOpen() {
+    const s = S.setup; if (s.demo) return;
+    const j = loadJ(); const id = Date.now();
+    j.push({ id, date: new Date().toISOString(), action: s.action, entry: s.entry, sl: s.sl, tp1: s.tp1, tp2: s.tp2, rMult: s.rMult, split: s.split, result: null });
+    saveJ(j); S.journalId = id; renderJournal();
+  }
+  function journalClose(result) {
+    if (!S.journalId) return;
+    const j = loadJ(); const it = j.find(x => x.id === S.journalId); if (it) { it.result = result; saveJ(j); renderJournal(); }
+  }
+  // Con lote divisible: 60 % en TP1 y 40 % en TP2 o breakeven. Con 0.01: todo en TP2 o breakeven.
+  function resultR(s) {
+    const r1 = s.rMult?.[0] || 0, r2 = s.rMult?.[1] || 0, split = s.split !== false;
+    if (s.result === 'SL') return -1;
+    if (s.result === 'TP1') return split ? TP1_CLOSE * r1 : 0;
+    if (s.result === 'TP2') return split ? TP1_CLOSE * r1 + (1 - TP1_CLOSE) * r2 : r2;
+    return 0;
+  }
+  const ecDay = ts => new Date(ts).toLocaleDateString('en-CA', { timeZone: EC_TZ });
+  function dailyStats() {
+    const today = ecDay(Date.now());
+    const j = loadJ().filter(x => ecDay(x.date) === today && x.result !== 'NONE').sort((a, b) => a.id - b.id);
+    const closed = j.filter(x => x.result);
+    const lockout = closed.length >= 2 && closed.slice(-2).every(x => x.result === 'SL');
+    return { count: j.length, stops: closed.filter(x => x.result === 'SL').length, lockout };
+  }
+  function renderDaily() {
+    const d = dailyStats(), el = $('dailyLine');
+    el.textContent = d.lockout ? 'Bloqueo de riesgo activo: dos stops seguidos hoy.' : `Hoy: ${d.count} de ${S.maxTrades} operaciones · ${d.stops} stop${d.stops === 1 ? '' : 's'}.`;
+    el.className = `text-[11px] rounded-lg px-3 py-2 border ${d.lockout || d.count >= S.maxTrades ? 'bg-rose-950/30 border-rose-500/40 text-rose-200' : 'bg-slate-800/50 border-slate-700 text-slate-300'}`;
+  }
+  $('selMaxTrades').addEventListener('change', e => { S.maxTrades = +e.target.value; try { localStorage.setItem('novagold_maxtrades', S.maxTrades); } catch {} renderDaily(); });
+  function renderJournal() {
+    const j = loadJ();
+    $('journalEmpty').classList.toggle('hidden', j.length > 0);
+    renderDaily();
+    const closed = j.filter(s => ['SL', 'BE', 'TP1', 'TP2', 'TIME'].includes(s.result));
+    const wins = closed.filter(s => ['TP1', 'TP2'].includes(s.result)).length, tot = closed.reduce((a, s) => a + resultR(s), 0);
+    $('stClosed').textContent = closed.length;
+    $('stWin').textContent = closed.length ? `${Math.round(wins / closed.length * 100)} %` : "—";
+    $('stR').textContent = closed.length ? `${tot >= 0 ? '+' : ''}${tot.toFixed(1)}R` : "—";
+    $('stR').className = `text-lg font-bold ${!closed.length ? 'text-white' : tot >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+    $('journalList').innerHTML = j.slice().reverse().map(s => {
+      const d = new Date(s.date).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' });
+      const opts = [['', 'Abierta'], ['TP1', 'TP1 + BE'], ['TP2', 'TP2'], ['BE', 'Breakeven'], ['SL', 'Stop'], ['TIME', 'Cierre manual'], ['NONE', 'Anulada']]
+        .map(([v, l]) => `<option value="${v}" ${(s.result || '') === v ? 'selected' : ''}>${l}</option>`).join('');
+      return `<div class="flex items-center justify-between gap-2 bg-brand-surface border border-slate-800 rounded-lg p-2.5 text-xs font-mono">
+        <div><span class="${s.action.includes('BUY') ? 'text-emerald-400' : 'text-rose-400'} font-bold">${esc(s.action)}</span>
+        <span class="text-slate-400 ml-1">${fmt(s.entry)}</span><span class="block text-[10px] text-slate-500">${esc(d)}</span></div>
+        <select data-id="${s.id}" class="j-res bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" aria-label="Resultado">${opts}</select></div>`;
+    }).join('');
+    document.querySelectorAll('.j-res').forEach(sel => sel.addEventListener('change', () => {
+      const jj = loadJ(); const it = jj.find(x => String(x.id) === sel.dataset.id); if (it) { it.result = sel.value || null; saveJ(jj); renderJournal(); }
+    }));
+  }
+  $('btnClearJournal').addEventListener('click', () => { if (confirm("¿Borrar todas las señales del diario? No se puede deshacer.")) { saveJ([]); renderJournal(); } });
+
+  // ======================= BACKEND: CONFIG, TELEGRAM E INFORME =======================
+  async function loadConfig() {
+    if (!configured) return;
+    try {
+      const r = await fetch(`${API}/api/v1/config`); if (!r.ok) throw new Error(r.status);
+      S.cfg = await r.json();
+      if (S.cfg.market_data) { PRICE_URL = `${API}/api/v1/price`; if (S.source === 'auto') startFeed(); }
+      if (S.cfg.telegram) {
+        show('tgBox');
+        $('inpNotifyKey').classList.toggle('hidden', !S.cfg.notify_key_required);
+        $('lblRememberKey').classList.toggle('hidden', !S.cfg.notify_key_required);
+      }
+      loadBrief();
+    } catch (e) { console.warn('Sin configuración del backend', e); }
+  }
+  try { S.tg = localStorage.getItem('novagold_tg') === '1'; $('chkTg').checked = S.tg; } catch {}
+  // Recordar la NOTIFY_KEY solo en este navegador (usar únicamente en un equipo personal)
+  const KEY_STORE = 'novagold_notify_key';
+  try {
+    const saved = localStorage.getItem(KEY_STORE);
+    if (saved) $('inpNotifyKey').value = saved;
+    $('chkRememberKey').checked = localStorage.getItem('novagold_remember_key') !== '0';
+  } catch {}
+  function persistKey() {
+    try {
+      localStorage.setItem('novagold_remember_key', $('chkRememberKey').checked ? '1' : '0');
+      if ($('chkRememberKey').checked && $('inpNotifyKey').value) localStorage.setItem(KEY_STORE, $('inpNotifyKey').value);
+      else localStorage.removeItem(KEY_STORE);
+    } catch {}
+  }
+  $('inpNotifyKey').addEventListener('change', persistKey);
+  $('chkRememberKey').addEventListener('change', persistKey);
+  $('chkTg').addEventListener('change', e => { S.tg = e.target.checked; try { localStorage.setItem('novagold_tg', S.tg ? '1' : '0'); } catch {} });
+
+  async function loadBrief() {
+    try {
+      const b = await (await fetch(`${API}/api/v1/brief`)).json();
+      show('briefBox');
+      $('briefText').textContent = b?.text
+        ? `${b.text}\n\nGenerado: ${new Date(b.generated_at).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })}`
+        : 'Todavía no hay informe. Se genera de lunes a viernes a las 06:45 (Ecuador), o pulsa "Generar ahora".';
+    } catch {}
+  }
+  $('btnBriefRun').addEventListener('click', async () => {
+    const key = $('inpNotifyKey').value;
+    $('btnBriefRun').disabled = true; $('btnBriefRun').textContent = 'Generando…';
+    try { const r = await fetch(`${API}/api/v1/brief/run`, { method: 'POST', headers: key ? { 'X-Notify-Key': key } : {} }); if (!r.ok) throw new Error(`HTTP ${r.status}`); await loadBrief(); }
+    catch (e) { toast('warn', 'No se pudo generar el informe', `Revisa el servidor (${e.message}).`); }
+    finally { $('btnBriefRun').disabled = false; $('btnBriefRun').textContent = 'Generar ahora'; }
+  });
+
+  // ======================= INICIO =======================
+  try { S.maxTrades = +(localStorage.getItem('novagold_maxtrades') || 3); $('selMaxTrades').value = S.maxTrades; } catch {}
+  loadSess(); setTab('trade'); updateSession(); renderDayMap(); renderJournal(); startFeed(); loadCalendar(); loadConfig();
+  </script>
+</body>
+</html>
